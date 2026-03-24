@@ -15,7 +15,7 @@ export default async function AdvisorDashboardPage() {
   const service = createServiceClient()
   const { data: leads, error } = await service
     .from('leads')
-    .select('id, created_at, first_name, email, phone, age, target_age, asset_range, current_income, desired_income, target_income, availability, is_purchased')
+    .select('id, created_at, first_name, email, phone, age, target_age, asset_range, current_income, desired_income, target_income, availability, is_purchased, view_count')
     .order('created_at', { ascending: false })
     .limit(200)
 

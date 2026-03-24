@@ -6,6 +6,7 @@ import { LogOut, Search } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import type { Lead } from '@/types'
 import LeadCard from './LeadCard'
+import LeadDetailPanel from './LeadDetailPanel'
 
 interface Props {
   user: { id: string; email: string }
@@ -18,6 +19,7 @@ export default function AdvisorDashboardClient({ user, leads }: Props) {
   const router = useRouter()
   const [tab, setTab]          = useState<Tab>('marketplace')
   const [search, setSearch]    = useState('')
+  const [openLead, setOpenLead] = useState<{ lead: Lead; index: number } | null>(null)
   const [purchasedIds, setPurchased] = useState<Set<string>>(
     new Set(leads.filter(l => l.is_purchased).map(l => l.id))
   )
@@ -128,11 +130,20 @@ export default function AdvisorDashboardClient({ user, leads }: Props) {
                 index={i}
                 isPurchased={purchasedIds.has(lead.id)}
                 onPurchase={() => markPurchased(lead.id)}
+                onViewDetails={() => setOpenLead({ lead, index: i })}
               />
             ))}
           </div>
         )}
       </div>
+
+      <LeadDetailPanel
+        lead={openLead?.lead ?? null}
+        index={openLead?.index ?? 0}
+        isPurchased={openLead ? purchasedIds.has(openLead.lead.id) : false}
+        onPurchase={() => openLead && markPurchased(openLead.lead.id)}
+        onClose={() => setOpenLead(null)}
+      />
     </div>
   )
 }

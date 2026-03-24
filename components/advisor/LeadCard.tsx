@@ -41,9 +41,10 @@ interface Props {
   index: number
   isPurchased: boolean
   onPurchase: () => void
+  onViewDetails: () => void
 }
 
-export default function LeadCard({ lead, index, isPurchased, onPurchase }: Props) {
+export default function LeadCard({ lead, index, isPurchased, onPurchase, onViewDetails }: Props) {
   const [showModal, setShowModal] = useState(false)
 
   const pot   = projectedPot(lead)
@@ -67,8 +68,8 @@ export default function LeadCard({ lead, index, isPurchased, onPurchase }: Props
           </span>
         </div>
 
-        {/* Header */}
-        <div className="flex items-center gap-3 pr-14">
+        {/* Header — click to open detail panel */}
+        <div className="flex items-center gap-3 pr-14 cursor-pointer" onClick={onViewDetails}>
           <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center shrink-0 text-gray-400 font-bold text-lg">
             {isPurchased ? lead.first_name.charAt(0).toUpperCase() : '?'}
           </div>

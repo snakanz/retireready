@@ -54,6 +54,7 @@ export interface Lead {
   target_income: number
   availability: string[]
   is_purchased: boolean
+  view_count: number
 }
 
 export interface MaskedLead {
