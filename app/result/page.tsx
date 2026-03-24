@@ -7,10 +7,7 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, ReferenceLine, ReferenceArea,
 } from 'recharts'
-import {
-  TrendingUp, AlertTriangle, CheckCircle, Phone,
-  ShieldCheck, Clock, ChevronRight, Users,
-} from 'lucide-react'
+import { TrendingUp, AlertTriangle, CheckCircle } from 'lucide-react'
 import { calculateReadinessScore, formatCurrency } from '@/lib/utils'
 import type { FunnelData, ReadinessScore } from '@/types'
 
@@ -317,67 +314,9 @@ export default function ResultPage() {
           </div>
         </div>
 
-        {/* ── Advisor CTA ───────────────────────────────────────────────────── */}
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.6, duration: 0.5 }}
-          className="glass-card border border-gold-400/25 bg-gold-400/5 space-y-4"
-        >
-          <div className="flex items-start gap-3">
-            <div className="w-10 h-10 rounded-full bg-gold-400/15 border border-gold-400/30 flex items-center justify-center shrink-0">
-              <Phone className="w-5 h-5 text-gold-400" />
-            </div>
-            <div>
-              <h3 className="text-white font-bold text-base">
-                Book a Free Call with a Qualified Adviser
-              </h3>
-              <p className="text-white/50 text-sm mt-1 leading-relaxed">
-                {runOutAge
-                  ? `See what can be done to close your ${unfundedYears}-year funding gap and secure the retirement you want.`
-                  : `Lock in your strong position and make sure you stay on track with expert guidance.`
-                }
-              </p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-3 gap-2 text-center">
-            {[
-              { icon: Clock,       text: '30 min call'    },
-              { icon: ShieldCheck, text: 'FCA regulated'  },
-              { icon: CheckCircle, text: 'No obligation'  },
-            ].map(({ icon: Icon, text }) => (
-              <div key={text} className="flex flex-col items-center gap-1">
-                <Icon className="w-4 h-4 text-gold-400/70" />
-                <span className="text-white/40 text-xs">{text}</span>
-              </div>
-            ))}
-          </div>
-
-          <button
-            onClick={() => router.push('/availability')}
-            className="btn-gold w-full flex items-center justify-center gap-2 group py-4"
-          >
-            <Phone className="w-4 h-4 shrink-0" />
-            See What Can Be Done to Improve This
-            <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-          </button>
-        </motion.div>
-
-        {/* ── Advisor reach-out note ─────────────────────────────────────── */}
-        <div className="glass-card flex items-start gap-3">
-          <div className="w-8 h-8 rounded-full bg-white/8 border border-white/12 flex items-center justify-center shrink-0 mt-0.5">
-            <Users className="w-4 h-4 text-white/50" />
-          </div>
-          <p className="text-white/55 text-sm leading-relaxed">
-            One of our expert advisers will review your retirement plan and reach out to arrange a
-            convenient meeting — <span className="text-white/80 font-medium">at no cost to you.</span>
-          </p>
-        </div>
-
         <p className="text-white/22 text-xs text-center pb-4 leading-relaxed">
           Projections assume 6% pre-retirement growth, 3% real return in retirement, and a 4% safe withdrawal rate.
-          Illustrative only — not financial advice. RetireReady introduces clients to FCA-authorised advisers.
+          Illustrative only — not financial advice.
         </p>
       </motion.div>
     </main>
