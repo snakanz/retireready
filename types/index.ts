@@ -18,8 +18,9 @@ export interface FunnelData {
   age: number
   targetAge: number
   assetRange: AssetRange
+  currentIncome: number
   targetIncome: number
-  availability: DayOfWeek[]
+  availability: string[]   // DayOfWeek values + time preference e.g. ["Monday","Wednesday","Morning"]
   firstName: string
   email: string
   phone: string

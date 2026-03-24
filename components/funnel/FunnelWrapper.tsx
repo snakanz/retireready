@@ -3,17 +3,14 @@
 import { useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
 import type { FunnelData } from '@/types'
 
-import Step1Age              from './Step1Age'
-import Step2Assets           from './Step2Assets'
-import Step3Income           from './Step3Income'
-import Step4ResultsPreview   from './Step4ResultsPreview'
-import Step5Contact          from './Step5Contact'
-import Step6Availability     from './Step4Availability'
+import Step1Age     from './Step1Age'
+import Step2Assets  from './Step2Assets'
+import Step3Income  from './Step3Income'
+import Step4Contact from './Step5Contact'   // file is Step5Contact, component is Step4Contact
 
-const TOTAL_STEPS = 6
+const TOTAL_STEPS = 4
 
 const variants = {
   enter:  (dir: number) => ({ x: dir > 0 ? 80 : -80, opacity: 0 }),
@@ -21,18 +18,16 @@ const variants = {
   exit:   (dir: number) => ({ x: dir > 0 ? -80 : 80, opacity: 0 }),
 }
 
-// Step labels for the progress bar
-const STEP_LABELS = ['Your Age', 'Savings', 'Income Goal', 'Your Preview', 'Your Details', 'Availability']
+const STEP_LABELS = ['Your Age', 'Your Savings', 'Your Income', 'Your Details']
 
 export default function FunnelWrapper() {
   const router = useRouter()
   const [step, setStep] = useState(1)
   const [direction, setDirection] = useState(1)
-  const [loading, setLoading] = useState(false)
-  const [submitError, setSubmitError] = useState<string | null>(null)
   const [data, setData] = useState<Partial<FunnelData>>({
     age: 45,
     targetAge: 65,
+    currentIncome: 65000,
     targetIncome: 40000,
     availability: [],
   })
@@ -51,30 +46,9 @@ export default function FunnelWrapper() {
     setData(prev => ({ ...prev, ...patch }))
   }
 
-  async function submit() {
-    setLoading(true)
-    setSubmitError(null)
-    const supabase = createClient()
-
-    const { error } = await supabase.from('leads').insert({
-      first_name:     data.firstName,
-      email:          data.email,
-      phone:          data.phone,
-      age:            data.age,
-      target_age:     data.targetAge,
-      asset_range:    data.assetRange,
-      target_income:  data.targetIncome,
-      availability:   data.availability,
-    })
-
-    if (error) {
-      console.error(error)
-      setSubmitError('Something went wrong — please try again.')
-      setLoading(false)
-      return
-    }
-
-    sessionStorage.setItem('rr_funnel', JSON.stringify(data))
+  function submit(contact: Pick<FunnelData, 'firstName' | 'email' | 'phone'>) {
+    const final = { ...data, ...contact }
+    sessionStorage.setItem('rr_funnel', JSON.stringify(final))
     router.push('/result')
   }
 
@@ -109,7 +83,6 @@ export default function FunnelWrapper() {
             transition={{ duration: 0.4 }}
           />
         </div>
-        {/* Step dots */}
         <div className="flex justify-between mt-2 px-0.5">
           {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
             <div
@@ -137,25 +110,10 @@ export default function FunnelWrapper() {
             {step === 1 && <Step1Age data={data} update={update} onNext={next} />}
             {step === 2 && <Step2Assets data={data} update={update} onNext={next} onBack={back} />}
             {step === 3 && <Step3Income data={data} update={update} onNext={next} onBack={back} />}
-            {step === 4 && <Step4ResultsPreview data={data} onNext={next} onBack={back} />}
-            {step === 5 && <Step5Contact data={data} update={update} onNext={next} onBack={back} />}
-            {step === 6 && (
-              <Step6Availability
-                data={data}
-                update={update}
-                onSubmit={submit}
-                onBack={back}
-                loading={loading}
-              />
-            )}
+            {step === 4 && <Step4Contact data={data} onSubmit={submit} onBack={back} />}
           </motion.div>
         </AnimatePresence>
       </div>
-
-      {/* Submit error */}
-      {submitError && (
-        <p className="text-red-400 text-sm mt-4 text-center">{submitError}</p>
-      )}
     </div>
   )
 }
