@@ -30,8 +30,15 @@ export function formatCurrency(amount: number): string {
   }).format(amount)
 }
 
-export function calculateReadinessScore(data: Partial<FunnelData>): ReadinessScore {
-  const { age = 40, targetAge = 65, assetRange = '£125k–150k', targetIncome = 30000 } = data
+export function calculateReadinessScore(data: Partial<FunnelData> | null | undefined): ReadinessScore {
+  // Guard: data may be null/undefined (e.g. sessionStorage parse returned null)
+  const safe = data && typeof data === 'object' ? data : {}
+
+  // Use Number() + || fallback so null coerces to 0 then falls to default
+  const age         = Number(safe.age)         || 40
+  const targetAge   = Number(safe.targetAge)   || 65
+  const assetRange  = safe.assetRange          ?? '£125k–150k'
+  const targetIncome = Number(safe.targetIncome) || 30000
 
   // Years to retirement
   const yearsLeft = Math.max(targetAge - age, 1)

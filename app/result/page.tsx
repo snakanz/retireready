@@ -22,9 +22,12 @@ const RETIREMENT_GROWTH  = 0.03   // 3% real return in retirement (conservative)
 interface PotPoint { age: number; pot: number }
 
 function buildPotData(projectedPot: number, targetIncome: number, retirementAge: number): PotPoint[] {
+  // Guard against NaN / Infinity / nonsensical values
+  if (!isFinite(projectedPot) || !isFinite(targetIncome) || !isFinite(retirementAge)) return []
+  if (retirementAge >= LIFE_EXPECTANCY) return []
   const out: PotPoint[] = []
   let pot = projectedPot
-  for (let age = retirementAge; age <= LIFE_EXPECTANCY; age++) {
+  for (let age = Math.floor(retirementAge); age <= LIFE_EXPECTANCY; age++) {
     out.push({ age, pot: Math.round(Math.max(pot, 0)) })
     pot = pot * (1 + RETIREMENT_GROWTH) - targetIncome
   }
@@ -52,42 +55,86 @@ export default function ResultPage() {
   const [animated,  setAnimated]  = useState(false)
   const [chartData, setChartData] = useState<PotPoint[]>([])
   const [runOutAge, setRunOutAge] = useState<number | null>(null)
+  // Prevents recharts from attempting to render during SSR pre-pass
+  const [mounted,   setMounted]   = useState(false)
 
   useEffect(() => {
-    const raw = sessionStorage.getItem('rr_funnel')
+    setMounted(true)
+
+    let raw: string | null = null
+    try {
+      raw = sessionStorage.getItem('rr_funnel')
+    } catch {
+      // sessionStorage unavailable (private browsing edge case)
+    }
+
     if (!raw) {
-      // Flow gate: user hasn't completed the funnel — send them back
       router.replace('/funnel')
       return
     }
-    const parsed: Partial<FunnelData> = JSON.parse(raw)
-    setFunnel(parsed)
-    const s = calculateReadinessScore(parsed)
-    setScore(s)
 
-    const retirementAge = parsed.targetAge ?? 65
-    const targetIncome  = parsed.targetIncome ?? 40000
-    const data = buildPotData(s.projectedPot, targetIncome, retirementAge)
-    setChartData(data)
-    setRunOutAge(data.find(d => d.pot === 0)?.age ?? null)
+    let parsed: Partial<FunnelData>
+    try {
+      const maybeData = JSON.parse(raw)
+      // JSON.parse can return null, a number, boolean etc — guard for object
+      if (!maybeData || typeof maybeData !== 'object') {
+        router.replace('/funnel')
+        return
+      }
+      parsed = maybeData as Partial<FunnelData>
+    } catch {
+      router.replace('/funnel')
+      return
+    }
+
+    setFunnel(parsed)
+
+    try {
+      const s = calculateReadinessScore(parsed)
+      setScore(s)
+
+      // Use Number() so null/undefined both coerce to 0, then fall to sensible default
+      const retirementAge = Math.max(Number(parsed.targetAge) || 65, 1)
+      const targetIncome  = Math.max(Number(parsed.targetIncome) || 40000, 1)
+
+      const data = buildPotData(s.projectedPot, targetIncome, retirementAge)
+      setChartData(data)
+      setRunOutAge(data.find(d => d.pot === 0)?.age ?? null)
+    } catch (err) {
+      console.error('[RetireReady] Results calculation error:', err)
+      // Provide a fallback score so the page renders rather than staying blank
+      setScore({ score: 45, label: 'On Track', colour: 'text-gold-400', projectedPot: 0, incomeGap: 0 })
+      setChartData([])
+    }
+
     setTimeout(() => setAnimated(true), 200)
   }, [router])
 
-  if (!score) return null   // redirect in progress
+  // Show nothing until client-side data is ready
+  if (!score || !mounted) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-white/40 text-sm">Loading your results…</div>
+      </div>
+    )
+  }
 
+  const safeScore     = isFinite(score.score) ? score.score : 45
   const circumference = 2 * Math.PI * 54
-  const offset = circumference - (score.score / 100) * circumference
-  const scoreStroke =
-    score.score >= 75 ? '#34d399' : score.score >= 50 ? '#C9A84C' :
-    score.score >= 30 ? '#f59e0b' : '#ef4444'
+  const offset        = circumference - (safeScore / 100) * circumference
+  const scoreStroke   =
+    safeScore >= 75 ? '#34d399' : safeScore >= 50 ? '#C9A84C' :
+    safeScore >= 30 ? '#f59e0b' : '#ef4444'
 
-  const retirementAge   = funnel.targetAge ?? 65
-  const targetIncome    = funnel.targetIncome ?? 40000
-  const sustainableIncome = Math.round(score.projectedPot * 0.04)
-  const yearsLeft       = Math.max(retirementAge - (funnel.age ?? 45), 0)
-  const fundedYears     = runOutAge ? runOutAge - retirementAge : LIFE_EXPECTANCY - retirementAge
-  const unfundedYears   = runOutAge ? LIFE_EXPECTANCY - runOutAge : 0
-  const monthlyIncome   = Math.round(sustainableIncome / 12)
+  const retirementAge     = Number(funnel.targetAge) || 65
+  const targetIncome      = Number(funnel.targetIncome) || 40000
+  const projectedPot      = isFinite(score.projectedPot) ? score.projectedPot : 0
+  const sustainableIncome = Math.round(projectedPot * 0.04)
+  const yearsLeft         = Math.max(retirementAge - (Number(funnel.age) || 45), 0)
+  const fundedYears       = runOutAge ? runOutAge - retirementAge : LIFE_EXPECTANCY - retirementAge
+  const unfundedYears     = runOutAge ? LIFE_EXPECTANCY - runOutAge : 0
+  const monthlyIncome     = Math.round(sustainableIncome / 12)
+  const incomeGap         = isFinite(score.incomeGap) ? score.incomeGap : 0
 
   // Prefer the range label if available, else format the number
   const targetIncomeDisplay = funnel.targetIncomeRange ?? formatCurrency(targetIncome)
@@ -141,7 +188,7 @@ export default function ResultPage() {
                   className="text-4xl font-extrabold text-white tabular-nums"
                   initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.8 }}
                 >
-                  {score.score}
+                  {safeScore}
                 </motion.span>
                 <span className={`text-sm font-semibold ${score.colour}`}>{score.label}</span>
               </div>
@@ -153,7 +200,7 @@ export default function ResultPage() {
         <div className="grid grid-cols-2 gap-3">
           <div className="glass-card text-center space-y-1">
             <TrendingUp className="w-5 h-5 text-gold-400 mx-auto mb-1.5" />
-            <div className="text-lg font-bold text-white">{formatCurrency(score.projectedPot)}</div>
+            <div className="text-lg font-bold text-white">{formatCurrency(projectedPot)}</div>
             <div className="text-white/40 text-xs">Pot at retirement</div>
           </div>
           <div className="glass-card text-center space-y-1">
@@ -172,15 +219,15 @@ export default function ResultPage() {
             <div className="text-white/40 text-xs">Years funded</div>
           </div>
           <div className="glass-card text-center space-y-1">
-            {score.incomeGap > 0
+            {incomeGap > 0
               ? <AlertTriangle className="w-5 h-5 text-red-400 mx-auto mb-1.5" />
               : <CheckCircle  className="w-5 h-5 text-emerald-400 mx-auto mb-1.5" />
             }
-            <div className={`text-lg font-bold ${score.incomeGap > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
-              {score.incomeGap > 0 ? formatCurrency(score.incomeGap) : 'On target'}
+            <div className={`text-lg font-bold ${incomeGap > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+              {incomeGap > 0 ? formatCurrency(incomeGap) : 'On target'}
             </div>
             <div className="text-white/40 text-xs">
-              {score.incomeGap > 0 ? 'Annual shortfall' : 'Income goal met'}
+              {incomeGap > 0 ? 'Annual shortfall' : 'Income goal met'}
             </div>
           </div>
         </div>
@@ -190,7 +237,7 @@ export default function ResultPage() {
           <div>
             <h2 className="text-white font-bold text-sm">How long will your money last?</h2>
             <p className="text-white/40 text-xs mt-0.5">
-              {formatCurrency(score.projectedPot)} pot · {targetIncomeDisplay}/yr drawn · life expectancy {LIFE_EXPECTANCY}
+              {formatCurrency(projectedPot)} pot · {targetIncomeDisplay}/yr drawn · life expectancy {LIFE_EXPECTANCY}
             </p>
           </div>
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { createClient } from '@/lib/supabase/client'
@@ -16,6 +16,22 @@ export default function AdvisorLoginPage() {
   const [loading, setLoading]   = useState(false)
   const [showPw, setShowPw]     = useState(false)
   const [signedUp, setSignedUp] = useState(false)
+
+  // Handle PKCE auth code exchange when Supabase redirects back with ?code=xxx
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const code   = params.get('code')
+    if (!code) return
+
+    const supabase = createClient()
+    supabase.auth.exchangeCodeForSession(code).then(({ error: authError }) => {
+      if (!authError) {
+        router.replace('/advisor/dashboard')
+      } else {
+        setError('Email confirmation failed. Please try signing in again.')
+      }
+    })
+  }, [router])
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     setForm(f => ({ ...f, [e.target.name]: e.target.value }))
@@ -42,6 +58,9 @@ export default function AdvisorLoginPage() {
       const { error: authError } = await supabase.auth.signUp({
         email:    form.email.trim(),
         password: form.password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/advisor/login`,
+        },
       })
       if (authError) {
         setError(authError.message ?? 'Could not create account. Please try again.')
