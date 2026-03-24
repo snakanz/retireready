@@ -1,0 +1,73 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+@layer base {
+  :root {
+    --background: 222 47% 8%;
+    --foreground: 210 40% 98%;
+    --card: 222 47% 11%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222 47% 11%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 43 57% 55%;
+    --primary-foreground: 222 47% 8%;
+    --secondary: 222 30% 18%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 222 30% 15%;
+    --muted-foreground: 215 20% 65%;
+    --accent: 222 30% 18%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 222 30% 20%;
+    --input: 222 30% 20%;
+    --ring: 43 57% 55%;
+    --radius: 0.75rem;
+  }
+}
+
+@layer base {
+  * { @apply border-border; }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    background: radial-gradient(ellipse at top, #0f2744 0%, #050e1a 60%);
+    min-height: 100vh;
+  }
+}
+
+@layer components {
+  .glass {
+    @apply backdrop-blur-xl bg-white/5 border border-white/10 shadow-2xl;
+  }
+  .glass-card {
+    @apply glass rounded-2xl p-6;
+  }
+  .glass-dark {
+    @apply backdrop-blur-xl bg-black/30 border border-white/8 shadow-2xl;
+  }
+  .btn-gold {
+    @apply bg-gold-400 hover:bg-gold-300 text-navy-900 font-semibold
+           transition-all duration-200 rounded-xl px-6 py-3
+           shadow-lg shadow-gold-400/20 hover:shadow-gold-400/40
+           hover:scale-[1.02] active:scale-[0.98];
+  }
+  .btn-outline-gold {
+    @apply border border-gold-400/50 text-gold-400 hover:bg-gold-400/10
+           font-semibold transition-all duration-200 rounded-xl px-6 py-3;
+  }
+  .score-ring {
+    filter: drop-shadow(0 0 12px rgba(201, 168, 76, 0.4));
+  }
+  .blurred-text {
+    filter: blur(6px);
+    user-select: none;
+    pointer-events: none;
+  }
+}
+
+/* Smooth page transitions */
+.page-enter { opacity: 0; transform: translateY(16px); }
+.page-enter-active { opacity: 1; transform: translateY(0); transition: all 0.35s ease; }
