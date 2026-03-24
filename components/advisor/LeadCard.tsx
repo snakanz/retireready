@@ -1,249 +1,186 @@
 'use client'
 
 import { useState } from 'react'
-import { motion } from 'framer-motion'
-import {
-  Mail, Phone, Calendar, TrendingUp, Clock,
-  ShoppingCart, CheckCircle, User, Briefcase,
-} from 'lucide-react'
-import { cn, formatCurrency } from '@/lib/utils'
+import { CreditCard, Clock, MapPin, CheckCircle } from 'lucide-react'
 import type { Lead } from '@/types'
 
-const LEAD_PRICE = 49   // £ — stub price
+// Asset range → midpoint in £
+const ASSET_MID: Record<string, number> = {
+  '£125k–150k': 137500, '£150k–175k': 162500, '£175k–200k': 187500,
+  '£200k–250k': 225000, '£250k–300k': 275000, '£300k–400k': 350000,
+  '£400k–500k': 450000, '£500k+': 600000,
+}
+
+function projectedPot(lead: Lead): number {
+  return ASSET_MID[lead.asset_range] ?? 150000
+}
+
+function calcPrice(lead: Lead): number {
+  return Math.max(49, Math.round(projectedPot(lead) / 2500))
+}
+
+function formatK(amount: number): string {
+  if (amount >= 1_000_000) return `£${Math.round(amount / 1_000_000)}m`
+  if (amount >= 1_000)     return `£${Math.round(amount / 1_000)}k`
+  return `£${amount}`
+}
+
+function parseIncomeMidpoint(rangeLabel: string | null, fallback: number): number {
+  if (!rangeLabel) return fallback
+  const nums = rangeLabel.replace(/[£,]/g, '').split(/[–\-]/).map(n => parseInt(n.trim()))
+  if (nums.length >= 2 && !isNaN(nums[0]) && !isNaN(nums[1])) return (nums[0] + nums[1]) / 2
+  return fallback
+}
+
+function formatTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+}
 
 interface Props {
   lead: Lead
+  index: number
   isPurchased: boolean
   onPurchase: () => void
 }
 
-// Parse the availability array into days + time preference
-function parseAvailability(availability: string[]): { days: string[]; time: string | null } {
-  const TIME_SLOTS = ['Morning', 'Afternoon', 'Evening']
-  const days = availability.filter(a => !TIME_SLOTS.includes(a))
-  const time = availability.find(a => TIME_SLOTS.includes(a)) ?? null
-  return { days, time }
-}
+export default function LeadCard({ lead, index, isPurchased, onPurchase }: Props) {
+  const [showModal, setShowModal] = useState(false)
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-GB', {
-    day: 'numeric', month: 'short', year: 'numeric',
-  })
-}
+  const pot   = projectedPot(lead)
+  const inc   = parseIncomeMidpoint(lead.current_income, lead.target_income)
+  const price = calcPrice(lead)
 
-// Colour avatar based on first letter
-function avatarColour(name: string) {
-  const colours = [
-    'bg-blue-500', 'bg-emerald-500', 'bg-amber-500',
-    'bg-purple-500', 'bg-rose-500', 'bg-cyan-500',
+  const stats = [
+    { label: 'POT',  value: formatK(pot) },
+    { label: 'INC.', value: formatK(inc) },
+    { label: 'AGE',  value: lead.age > 0 ? String(lead.age) : '—' },
   ]
-  return colours[name.charCodeAt(0) % colours.length]
-}
-
-export default function LeadCard({ lead, isPurchased, onPurchase }: Props) {
-  const [showPurchaseModal, setShowPurchaseModal] = useState(false)
-  const { days, time } = parseAvailability(lead.availability ?? [])
-  const initials = lead.first_name.charAt(0).toUpperCase()
 
   return (
     <>
-      <motion.div
-        variants={{
-          hidden:  { opacity: 0, y: 16 },
-          visible: { opacity: 1, y: 0, transition: { duration: 0.3 } },
-        }}
-        className={cn(
-          'glass-card flex flex-col gap-4 relative overflow-hidden',
-          isPurchased && 'ring-1 ring-emerald-400/30'
-        )}
-      >
-        {/* New badge */}
-        {!isPurchased && (
-          <div className="absolute top-4 right-4">
-            <span className="bg-gold-400/20 border border-gold-400/40 text-gold-400 text-xs font-semibold px-2 py-0.5 rounded-full">
-              New
-            </span>
-          </div>
-        )}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-col gap-4 relative">
 
-        {/* ── Header: name + contact ─────────────────────────────────────── */}
-        <div className="flex items-start gap-3">
-          <div className={cn(
-            'w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-base shrink-0',
-            avatarColour(lead.first_name)
-          )}>
-            {initials}
+        {/* Price badge */}
+        <div className="absolute top-4 right-4">
+          <span className="bg-indigo-50 text-indigo-700 text-xs font-bold px-2.5 py-1 rounded-full border border-indigo-100">
+            £{price}
+          </span>
+        </div>
+
+        {/* Header */}
+        <div className="flex items-center gap-3 pr-14">
+          <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center shrink-0 text-gray-400 font-bold text-lg">
+            {isPurchased ? lead.first_name.charAt(0).toUpperCase() : '?'}
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-white font-bold text-base truncate">{lead.first_name}</p>
-            {isPurchased ? (
-              <div className="space-y-0.5 mt-0.5">
-                <div className="flex items-center gap-1.5 text-white/55 text-xs">
-                  <Mail className="w-3 h-3 shrink-0" />
-                  <span className="truncate">{lead.email}</span>
-                </div>
-                <div className="flex items-center gap-1.5 text-white/55 text-xs">
-                  <Phone className="w-3 h-3 shrink-0" />
-                  <span>{lead.phone}</span>
-                </div>
-              </div>
-            ) : (
-              <p className="text-white/35 text-xs mt-0.5">Contact details unlocked on purchase</p>
-            )}
+          <div>
+            <p className="font-bold text-gray-900 text-sm leading-tight">
+              {isPurchased ? lead.first_name : `Potential Client #${index}`}
+            </p>
+            <div className="flex items-center gap-1.5 text-xs text-gray-400 mt-0.5">
+              <Clock className="w-3 h-3" />
+              <span>{formatTime(lead.created_at)}</span>
+              <span>·</span>
+              <MapPin className="w-3 h-3" />
+              <span>LONDON</span>
+            </div>
           </div>
         </div>
 
-        {/* ── Details grid ──────────────────────────────────────────────── */}
-        <div className="space-y-2.5 text-sm">
-          {/* Age */}
-          <Row icon={User} label="Age">
-            <span className="text-white font-medium">
-              {lead.age > 0 ? `${lead.age} yrs` : '—'}
-            </span>
-            {lead.target_age > 0 && (
-              <span className="text-white/45 text-xs ml-1">→ retiring at {lead.target_age}</span>
-            )}
-          </Row>
-
-          {/* Assets */}
-          <Row icon={Briefcase} label="Assets">
-            <span className="text-white font-medium">{lead.asset_range ?? '—'}</span>
-          </Row>
-
-          {/* Current income */}
-          <Row icon={TrendingUp} label="Current income">
-            <span className="text-white font-medium">{lead.current_income ?? '—'}</span>
-          </Row>
-
-          {/* Target income */}
-          <Row icon={TrendingUp} label="Retirement goal">
-            <span className="text-white font-medium">
-              {lead.desired_income ?? (lead.target_income ? formatCurrency(lead.target_income) + '/yr' : '—')}
-            </span>
-          </Row>
-
-          {/* Availability */}
-          <Row icon={Calendar} label="Available">
-            {days.length > 0 ? (
-              <div className="flex flex-wrap gap-1">
-                {days.map(d => (
-                  <span key={d} className="bg-white/8 border border-white/12 rounded-md px-1.5 py-0.5 text-white/70 text-xs">
-                    {d.slice(0, 3)}
-                  </span>
-                ))}
-                {time && (
-                  <span className="bg-gold-400/12 border border-gold-400/20 rounded-md px-1.5 py-0.5 text-gold-400/80 text-xs">
-                    {time}
-                  </span>
-                )}
-              </div>
-            ) : (
-              <span className="text-white/35">Not specified</span>
-            )}
-          </Row>
-
-          {/* Date submitted */}
-          <Row icon={Clock} label="Submitted">
-            <span className="text-white/65 font-medium">{formatDate(lead.created_at)}</span>
-          </Row>
+        {/* Stats row */}
+        <div className="grid grid-cols-3 gap-2">
+          {stats.map(({ label, value }) => (
+            <div key={label} className="bg-gray-50 rounded-xl p-2.5 text-center">
+              <p className="text-gray-400 text-xs font-medium mb-0.5">{label}</p>
+              <p className="text-gray-900 font-bold text-sm">{value}</p>
+            </div>
+          ))}
         </div>
 
-        {/* ── Purchase button ───────────────────────────────────────────── */}
+        {/* Unlocked contact details */}
+        {isPurchased && (
+          <div className="bg-green-50 border border-green-100 rounded-xl px-4 py-3 space-y-1">
+            <p className="text-green-700 text-xs font-semibold">Contact Details</p>
+            <p className="text-gray-700 text-xs">{lead.email}</p>
+            <p className="text-gray-700 text-xs">{lead.phone}</p>
+          </div>
+        )}
+
+        {/* CTA */}
         {isPurchased ? (
-          <div className="flex items-center gap-2 bg-emerald-400/10 border border-emerald-400/25 rounded-xl px-4 py-2.5">
-            <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
-            <span className="text-emerald-400 text-sm font-semibold">Lead Purchased</span>
+          <div className="flex items-center justify-center gap-2 bg-green-50 border border-green-200 rounded-xl py-2.5">
+            <CheckCircle className="w-4 h-4 text-green-600" />
+            <span className="text-green-700 text-sm font-semibold">Lead Purchased</span>
           </div>
         ) : (
           <button
-            onClick={() => setShowPurchaseModal(true)}
-            className="btn-gold w-full flex items-center justify-center gap-2 text-sm"
+            onClick={() => setShowModal(true)}
+            className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white text-sm font-semibold rounded-xl py-3 transition-colors"
           >
-            <ShoppingCart className="w-4 h-4" />
-            Purchase Lead — £{LEAD_PRICE}
+            <CreditCard className="w-4 h-4" />
+            Unlock Lead Details
           </button>
         )}
-      </motion.div>
+      </div>
 
-      {/* ── Purchase modal (stub) ────────────────────────────────────────── */}
-      {showPurchaseModal && (
+      {/* Purchase modal */}
+      {showModal && (
         <div
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-          onClick={() => setShowPurchaseModal(false)}
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onClick={() => setShowModal(false)}
         >
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="glass-card max-w-sm w-full space-y-5 text-center"
+          <div
+            className="bg-white rounded-2xl max-w-sm w-full p-6 space-y-5 shadow-2xl"
             onClick={e => e.stopPropagation()}
           >
-            <div className="w-14 h-14 rounded-full bg-gold-400/15 border border-gold-400/30 flex items-center justify-center mx-auto">
-              <ShoppingCart className="w-7 h-7 text-gold-400" />
-            </div>
-
-            <div>
-              <h2 className="text-xl font-bold text-white">Purchase this lead</h2>
-              <p className="text-white/50 text-sm mt-1">
-                You'll receive full contact details and be able to reach out directly.
+            <div className="text-center">
+              <div className="w-14 h-14 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <CreditCard className="w-7 h-7 text-indigo-600" />
+              </div>
+              <h2 className="text-xl font-bold text-gray-900">Unlock Lead Details</h2>
+              <p className="text-gray-500 text-sm mt-1">
+                Get the full contact details for Potential Client #{index}.
               </p>
             </div>
 
-            <div className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-left space-y-1.5">
-              <div className="flex justify-between text-sm">
-                <span className="text-white/50">Lead</span>
-                <span className="text-white font-medium">{lead.first_name}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-white/50">Price</span>
-                <span className="text-gold-400 font-bold">£{LEAD_PRICE}</span>
-              </div>
+            <div className="bg-gray-50 rounded-xl p-4 space-y-2.5">
+              {[
+                { label: 'Lead',  value: `Potential Client #${index}` },
+                { label: 'Age',   value: lead.age > 0 ? `${lead.age} yrs` : '—' },
+                { label: 'Pot',   value: formatK(pot) },
+                { label: 'Price', value: `£${price}`, highlight: true },
+              ].map(({ label, value, highlight }) => (
+                <div key={label} className="flex justify-between text-sm">
+                  <span className="text-gray-500">{label}</span>
+                  <span className={highlight ? 'text-indigo-600 font-bold' : 'text-gray-900 font-medium'}>
+                    {value}
+                  </span>
+                </div>
+              ))}
             </div>
 
-            <div className="bg-amber-400/8 border border-amber-400/20 rounded-xl px-4 py-2.5">
-              <p className="text-amber-400/90 text-xs">
-                🚧 Payment integration coming soon. Click Confirm to stub this purchase.
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 text-center">
+              <p className="text-amber-700 text-xs">
+                🚧 Payment coming soon — click Confirm to unlock for free now.
               </p>
             </div>
 
             <div className="flex gap-3">
               <button
-                onClick={() => setShowPurchaseModal(false)}
-                className="btn-outline-gold flex-1 text-sm"
+                onClick={() => setShowModal(false)}
+                className="flex-1 py-2.5 border border-gray-200 rounded-xl text-gray-600 text-sm font-semibold hover:bg-gray-50 transition-colors"
               >
                 Cancel
               </button>
               <button
-                onClick={() => {
-                  onPurchase()
-                  setShowPurchaseModal(false)
-                }}
-                className="btn-gold flex-1 flex items-center justify-center gap-2 text-sm"
+                onClick={() => { onPurchase(); setShowModal(false) }}
+                className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold transition-colors"
               >
-                <CheckCircle className="w-4 h-4" /> Confirm
+                Confirm
               </button>
             </div>
-          </motion.div>
+          </div>
         </div>
       )}
     </>
-  )
-}
-
-// ─── Small helper row ─────────────────────────────────────────────────────────
-function Row({
-  icon: Icon,
-  label,
-  children,
-}: {
-  icon: React.ElementType
-  label: string
-  children: React.ReactNode
-}) {
-  return (
-    <div className="flex items-start gap-2.5">
-      <Icon className="w-3.5 h-3.5 text-white/30 shrink-0 mt-0.5" />
-      <span className="text-white/40 text-xs w-28 shrink-0">{label}</span>
-      <div className="flex-1 flex items-center flex-wrap gap-1">{children}</div>
-    </div>
   )
 }
