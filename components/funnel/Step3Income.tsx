@@ -18,29 +18,38 @@ const STEP = 5000
 export default function Step3Income({ data, update, onNext, onBack }: Props) {
   const income = data.targetIncome ?? 40000
 
-  // Lifestyle descriptors
   function getLifestyleLabel(val: number): string {
-    if (val <= 25000) return 'Essential — covers basics comfortably'
+    if (val <= 25000) return 'Essential — covers the basics comfortably'
     if (val <= 40000) return 'Comfortable — holidays & hobbies included'
     if (val <= 70000) return 'Affluent — frequent travel & dining out'
-    if (val <= 100000) return 'Luxury — premium lifestyle'
+    if (val <= 100000) return 'Luxury — premium lifestyle with flexibility'
     return 'High Net Worth — significant wealth required'
+  }
+
+  function getLifestyleColour(val: number): string {
+    if (val <= 25000) return 'text-blue-300/70'
+    if (val <= 40000) return 'text-emerald-300/70'
+    if (val <= 70000) return 'text-gold-400/70'
+    if (val <= 100000) return 'text-amber-300/70'
+    return 'text-purple-300/70'
   }
 
   return (
     <div className="glass-card space-y-8">
       <div>
-        <p className="text-gold-400 text-sm font-semibold uppercase tracking-widest mb-2">Step 3 — Income Goal</p>
-        <h2 className="text-2xl font-bold text-white">What annual income do you want in retirement?</h2>
-        <p className="text-white/50 text-sm mt-1">In today's money, before tax.</p>
+        <p className="text-gold-400 text-sm font-semibold uppercase tracking-widest mb-2">Step 3 of 6</p>
+        <h2 className="text-2xl font-bold text-white">What income do you want in retirement?</h2>
+        <p className="text-white/50 text-sm mt-2">
+          Think about what a comfortable life costs today — in today's money, before tax.
+        </p>
       </div>
 
       {/* Big income display */}
-      <div className="text-center py-4">
+      <div className="text-center py-2">
         <div className="text-5xl font-extrabold text-gold-400 tabular-nums">
           {formatCurrency(income)}
         </div>
-        <div className="text-white/50 text-sm mt-2">per year</div>
+        <div className="text-white/40 text-sm mt-1.5">per year</div>
       </div>
 
       {/* Slider */}
@@ -60,7 +69,7 @@ export default function Step3Income({ data, update, onNext, onBack }: Props) {
 
       {/* Lifestyle pill */}
       <div className="bg-navy-500/40 border border-white/10 rounded-xl p-3 text-center">
-        <span className="text-white/70 text-sm">{getLifestyleLabel(income)}</span>
+        <span className={`text-sm font-medium ${getLifestyleColour(income)}`}>{getLifestyleLabel(income)}</span>
       </div>
 
       <div className="flex gap-3">
@@ -68,7 +77,7 @@ export default function Step3Income({ data, update, onNext, onBack }: Props) {
           <ArrowLeft className="w-4 h-4" /> Back
         </button>
         <button onClick={onNext} className="btn-gold flex-1 flex items-center justify-center gap-2 group">
-          Continue <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+          Calculate My Plan <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
         </button>
       </div>
     </div>

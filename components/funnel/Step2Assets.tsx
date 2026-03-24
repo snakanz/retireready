@@ -1,6 +1,6 @@
 'use client'
 
-import { ArrowLeft, ArrowRight } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Info } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { AssetRange, FunnelData } from '@/types'
 
@@ -22,9 +22,11 @@ export default function Step2Assets({ data, update, onNext, onBack }: Props) {
   return (
     <div className="glass-card space-y-6">
       <div>
-        <p className="text-gold-400 text-sm font-semibold uppercase tracking-widest mb-2">Step 2 — Current Savings</p>
-        <h2 className="text-2xl font-bold text-white">What is the approximate value of your current pension & investments?</h2>
-        <p className="text-white/50 text-sm mt-1">Include ISAs, pensions, and investment accounts.</p>
+        <p className="text-gold-400 text-sm font-semibold uppercase tracking-widest mb-2">Step 2 of 6</p>
+        <h2 className="text-2xl font-bold text-white">How much have you saved so far?</h2>
+        <p className="text-white/50 text-sm mt-2">
+          Include pensions, ISAs, savings accounts — everything counts towards your future.
+        </p>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
@@ -42,6 +44,14 @@ export default function Step2Assets({ data, update, onNext, onBack }: Props) {
             {range}
           </button>
         ))}
+      </div>
+
+      {/* Reassurance note */}
+      <div className="flex items-start gap-2 bg-white/3 border border-white/8 rounded-xl px-4 py-3">
+        <Info className="w-4 h-4 text-white/40 shrink-0 mt-0.5" />
+        <p className="text-white/40 text-xs leading-relaxed">
+          A rough estimate is fine — this helps us give you a realistic projection. You can refine the details with your adviser.
+        </p>
       </div>
 
       <div className="flex gap-3 pt-2">

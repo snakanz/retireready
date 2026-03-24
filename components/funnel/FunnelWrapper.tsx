@@ -6,13 +6,14 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import type { FunnelData } from '@/types'
 
-import Step1Age        from './Step1Age'
-import Step2Assets     from './Step2Assets'
-import Step3Income     from './Step3Income'
-import Step4Availability from './Step4Availability'
-import Step5Contact    from './Step5Contact'
+import Step1Age              from './Step1Age'
+import Step2Assets           from './Step2Assets'
+import Step3Income           from './Step3Income'
+import Step4ResultsPreview   from './Step4ResultsPreview'
+import Step5Contact          from './Step5Contact'
+import Step6Availability     from './Step4Availability'
 
-const TOTAL_STEPS = 5
+const TOTAL_STEPS = 6
 
 const variants = {
   enter:  (dir: number) => ({ x: dir > 0 ? 80 : -80, opacity: 0 }),
@@ -20,11 +21,15 @@ const variants = {
   exit:   (dir: number) => ({ x: dir > 0 ? -80 : 80, opacity: 0 }),
 }
 
+// Step labels for the progress bar
+const STEP_LABELS = ['Your Age', 'Savings', 'Income Goal', 'Your Preview', 'Your Details', 'Availability']
+
 export default function FunnelWrapper() {
   const router = useRouter()
   const [step, setStep] = useState(1)
   const [direction, setDirection] = useState(1)
   const [loading, setLoading] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
   const [data, setData] = useState<Partial<FunnelData>>({
     age: 45,
     targetAge: 65,
@@ -46,30 +51,30 @@ export default function FunnelWrapper() {
     setData(prev => ({ ...prev, ...patch }))
   }
 
-  async function submit(contact: Pick<FunnelData, 'firstName' | 'email' | 'phone'>) {
+  async function submit() {
     setLoading(true)
-    const final: FunnelData = { ...data, ...contact } as FunnelData
+    setSubmitError(null)
     const supabase = createClient()
 
     const { error } = await supabase.from('leads').insert({
-      first_name:     final.firstName,
-      email:          final.email,
-      phone:          final.phone,
-      age:            final.age,
-      target_age:     final.targetAge,
-      asset_range:    final.assetRange,
-      target_income:  final.targetIncome,
-      availability:   final.availability,
+      first_name:     data.firstName,
+      email:          data.email,
+      phone:          data.phone,
+      age:            data.age,
+      target_age:     data.targetAge,
+      asset_range:    data.assetRange,
+      target_income:  data.targetIncome,
+      availability:   data.availability,
     })
 
     if (error) {
       console.error(error)
+      setSubmitError('Something went wrong — please try again.')
       setLoading(false)
       return
     }
 
-    // Store minimal data for result page
-    sessionStorage.setItem('rr_funnel', JSON.stringify(final))
+    sessionStorage.setItem('rr_funnel', JSON.stringify(data))
     router.push('/result')
   }
 
@@ -94,8 +99,8 @@ export default function FunnelWrapper() {
       {/* Progress bar */}
       <div className="w-full max-w-lg mb-8">
         <div className="flex justify-between text-xs text-white/40 mb-2">
+          <span className="font-medium text-white/60">{STEP_LABELS[step - 1]}</span>
           <span>Step {step} of {TOTAL_STEPS}</span>
-          <span>{Math.round(progress)}% complete</span>
         </div>
         <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
           <motion.div
@@ -103,6 +108,17 @@ export default function FunnelWrapper() {
             animate={{ width: `${progress}%` }}
             transition={{ duration: 0.4 }}
           />
+        </div>
+        {/* Step dots */}
+        <div className="flex justify-between mt-2 px-0.5">
+          {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
+            <div
+              key={i}
+              className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${
+                i + 1 <= step ? 'bg-gold-400' : 'bg-white/15'
+              }`}
+            />
+          ))}
         </div>
       </div>
 
@@ -121,11 +137,25 @@ export default function FunnelWrapper() {
             {step === 1 && <Step1Age data={data} update={update} onNext={next} />}
             {step === 2 && <Step2Assets data={data} update={update} onNext={next} onBack={back} />}
             {step === 3 && <Step3Income data={data} update={update} onNext={next} onBack={back} />}
-            {step === 4 && <Step4Availability data={data} update={update} onNext={next} onBack={back} />}
-            {step === 5 && <Step5Contact data={data} onSubmit={submit} onBack={back} loading={loading} />}
+            {step === 4 && <Step4ResultsPreview data={data} onNext={next} onBack={back} />}
+            {step === 5 && <Step5Contact data={data} update={update} onNext={next} onBack={back} />}
+            {step === 6 && (
+              <Step6Availability
+                data={data}
+                update={update}
+                onSubmit={submit}
+                onBack={back}
+                loading={loading}
+              />
+            )}
           </motion.div>
         </AnimatePresence>
       </div>
+
+      {/* Submit error */}
+      {submitError && (
+        <p className="text-red-400 text-sm mt-4 text-center">{submitError}</p>
+      )}
     </div>
   )
 }
