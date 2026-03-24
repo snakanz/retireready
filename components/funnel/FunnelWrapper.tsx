@@ -51,7 +51,7 @@ export default function FunnelWrapper() {
     const final: FunnelData = { ...data, ...contact } as FunnelData
     const supabase = createClient()
 
-    const { data: lead, error } = await supabase.from('leads').insert({
+    const { error } = await supabase.from('leads').insert({
       first_name:     final.firstName,
       email:          final.email,
       phone:          final.phone,
@@ -60,9 +60,9 @@ export default function FunnelWrapper() {
       asset_range:    final.assetRange,
       target_income:  final.targetIncome,
       availability:   final.availability,
-    }).select('id').single()
+    })
 
-    if (error || !lead) {
+    if (error) {
       console.error(error)
       setLoading(false)
       return
@@ -70,7 +70,7 @@ export default function FunnelWrapper() {
 
     // Store minimal data for result page
     sessionStorage.setItem('rr_funnel', JSON.stringify(final))
-    router.push(`/result?id=${lead.id}`)
+    router.push('/result')
   }
 
   const progress = ((step - 1) / (TOTAL_STEPS - 1)) * 100
