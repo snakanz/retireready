@@ -15,12 +15,26 @@ export type AssetRange =
 export type DayOfWeek = 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday'
 
 export interface FunnelData {
-  age: number
-  targetAge: number
+  // Current age — stored as midpoint + optional display label
+  age: number            // e.g. 50 (midpoint of "45–54")
+  ageRange?: string      // e.g. "45–54"
+
+  // Retirement age — exact value
+  targetAge: number      // e.g. 65
+
+  // Assets
   assetRange: AssetRange
-  currentIncome: number
-  targetIncome: number
-  availability: string[]   // DayOfWeek values + time preference e.g. ["Monday","Wednesday","Morning"]
+
+  // Incomes — midpoint for calculations + range label for Supabase/display
+  currentIncome?: number          // midpoint, e.g. 62500
+  currentIncomeRange?: string     // e.g. "£50,000–£75,000"
+  targetIncome: number            // midpoint, e.g. 35000
+  targetIncomeRange?: string      // e.g. "£30,000–£40,000"
+
+  // Availability — day(s) + time preference
+  availability: string[]   // e.g. ["Monday","Wednesday","Morning"]
+
+  // Contact
   firstName: string
   email: string
   phone: string
@@ -35,6 +49,8 @@ export interface Lead {
   age: number
   target_age: number
   asset_range: string
+  current_income: string | null    // income range label, e.g. "£50,000–£75,000"
+  desired_income: string | null    // retirement income range label
   target_income: number
   availability: string[]
   is_purchased: boolean

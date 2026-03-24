@@ -3,14 +3,16 @@
 import { useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
 import type { FunnelData } from '@/types'
 
-import Step1Age     from './Step1Age'
-import Step2Assets  from './Step2Assets'
-import Step3Income  from './Step3Income'
-import Step4Contact from './Step5Contact'   // file is Step5Contact, component is Step4Contact
+import Step1Age          from './Step1Age'
+import Step2Assets       from './Step2Assets'
+import Step3Income       from './Step3Income'
+import Step4Contact      from './Step5Contact'   // component renamed to Step4Contact inside
+import Step5Availability from './Step4Availability'
 
-const TOTAL_STEPS = 4
+const TOTAL_STEPS = 5
 
 const variants = {
   enter:  (dir: number) => ({ x: dir > 0 ? 80 : -80, opacity: 0 }),
@@ -18,37 +20,59 @@ const variants = {
   exit:   (dir: number) => ({ x: dir > 0 ? -80 : 80, opacity: 0 }),
 }
 
-const STEP_LABELS = ['Your Age', 'Your Savings', 'Your Income', 'Your Details']
+const STEP_LABELS = ['Your Age', 'Your Savings', 'Your Income', 'Your Details', 'Your Availability']
 
 export default function FunnelWrapper() {
   const router = useRouter()
-  const [step, setStep] = useState(1)
-  const [direction, setDirection] = useState(1)
+  const [step, setStep]       = useState(1)
+  const [direction, setDir]   = useState(1)
+  const [loading, setLoading] = useState(false)
+  const [submitError, setError] = useState<string | null>(null)
+
   const [data, setData] = useState<Partial<FunnelData>>({
-    age: 45,
+    age: 0,
     targetAge: 65,
-    currentIncome: 65000,
-    targetIncome: 40000,
+    targetIncome: 35000,
     availability: [],
   })
 
-  function next() {
-    setDirection(1)
-    setStep(s => Math.min(s + 1, TOTAL_STEPS))
+  function next() { setDir(1);  setStep(s => Math.min(s + 1, TOTAL_STEPS)) }
+  function back() { setDir(-1); setStep(s => Math.max(s - 1, 1)) }
+  function update(patch: Partial<FunnelData>) { setData(prev => ({ ...prev, ...patch })) }
+
+  // Called by Step4Contact after validation — stores contact fields then advances
+  function saveContact(contact: Pick<FunnelData, 'firstName' | 'email' | 'phone'>) {
+    setData(prev => ({ ...prev, ...contact }))
+    next()
   }
 
-  function back() {
-    setDirection(-1)
-    setStep(s => Math.max(s - 1, 1))
-  }
+  // Final submit — called by Step5Availability after days/time are chosen
+  async function submit() {
+    setLoading(true)
+    setError(null)
 
-  function update(patch: Partial<FunnelData>) {
-    setData(prev => ({ ...prev, ...patch }))
-  }
+    const supabase = createClient()
+    const { error } = await supabase.from('leads').insert({
+      first_name:     data.firstName,
+      email:          data.email,
+      phone:          data.phone,
+      age:            data.age,
+      target_age:     data.targetAge,
+      asset_range:    data.assetRange,
+      current_income: data.currentIncomeRange ?? null,
+      desired_income: data.targetIncomeRange  ?? null,
+      target_income:  data.targetIncome,
+      availability:   data.availability,
+    })
 
-  function submit(contact: Pick<FunnelData, 'firstName' | 'email' | 'phone'>) {
-    const final = { ...data, ...contact }
-    sessionStorage.setItem('rr_funnel', JSON.stringify(final))
+    if (error) {
+      console.error(error)
+      setError('Something went wrong saving your details — please try again.')
+      setLoading(false)
+      return
+    }
+
+    sessionStorage.setItem('rr_funnel', JSON.stringify(data))
     router.push('/result')
   }
 
@@ -56,7 +80,7 @@ export default function FunnelWrapper() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-4 py-12">
-      {/* Logo bar */}
+      {/* Logo */}
       <div className="flex items-center gap-2 mb-10">
         <svg width="24" height="24" viewBox="0 0 36 36" fill="none">
           <polyline points="4,28 12,16 20,22 28,10 32,14"
@@ -70,7 +94,7 @@ export default function FunnelWrapper() {
         </span>
       </div>
 
-      {/* Progress bar */}
+      {/* Progress */}
       <div className="w-full max-w-lg mb-8">
         <div className="flex justify-between text-xs text-white/40 mb-2">
           <span className="font-medium text-white/60">{STEP_LABELS[step - 1]}</span>
@@ -85,12 +109,9 @@ export default function FunnelWrapper() {
         </div>
         <div className="flex justify-between mt-2 px-0.5">
           {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
-            <div
-              key={i}
-              className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${
-                i + 1 <= step ? 'bg-gold-400' : 'bg-white/15'
-              }`}
-            />
+            <div key={i} className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${
+              i + 1 <= step ? 'bg-gold-400' : 'bg-white/15'
+            }`} />
           ))}
         </div>
       </div>
@@ -107,13 +128,26 @@ export default function FunnelWrapper() {
             exit="exit"
             transition={{ duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}
           >
-            {step === 1 && <Step1Age data={data} update={update} onNext={next} />}
-            {step === 2 && <Step2Assets data={data} update={update} onNext={next} onBack={back} />}
-            {step === 3 && <Step3Income data={data} update={update} onNext={next} onBack={back} />}
-            {step === 4 && <Step4Contact data={data} onSubmit={submit} onBack={back} />}
+            {step === 1 && <Step1Age     data={data} update={update} onNext={next} />}
+            {step === 2 && <Step2Assets  data={data} update={update} onNext={next} onBack={back} />}
+            {step === 3 && <Step3Income  data={data} update={update} onNext={next} onBack={back} />}
+            {step === 4 && <Step4Contact data={data} onSubmit={saveContact} onBack={back} />}
+            {step === 5 && (
+              <Step5Availability
+                data={data}
+                update={update}
+                onSubmit={submit}
+                onBack={back}
+                loading={loading}
+              />
+            )}
           </motion.div>
         </AnimatePresence>
       </div>
+
+      {submitError && (
+        <p className="text-red-400 text-sm mt-4 text-center">{submitError}</p>
+      )}
     </div>
   )
 }
