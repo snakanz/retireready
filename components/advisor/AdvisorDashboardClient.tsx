@@ -62,6 +62,24 @@ export default function AdvisorDashboardClient({
     setPurchased(prev => new Set([...Array.from(prev), id]))
   }
 
+  async function handlePurchase(leadId: string, pricePounds: number): Promise<{ ok: boolean; reason?: string; is_free?: boolean }> {
+    const supabase = createClient()
+    const { data, error } = await supabase.rpc('purchase_lead', {
+      p_advisor_id: user.id,
+      p_lead_id:    leadId,
+      p_price:      pricePounds * 100, // convert to pence
+    })
+    if (error) {
+      console.error('[AdvisorDashboard] purchase_lead error:', error)
+      return { ok: false, reason: 'error' }
+    }
+    if (data?.ok) {
+      markPurchased(leadId)
+      router.refresh() // re-fetch wallet balance from server
+    }
+    return data as { ok: boolean; reason?: string; is_free?: boolean }
+  }
+
   async function updateLeadStatus(leadId: string, status: LeadStatus['status']) {
     // Optimistic update
     setLeadStatuses(prev => new Map(prev).set(leadId, status))
@@ -240,8 +258,9 @@ export default function AdvisorDashboardClient({
                     lead={lead}
                     index={i}
                     isPurchased={purchasedIds.has(lead.id)}
-                    onPurchase={() => markPurchased(lead.id)}
+                    onPurchase={(price) => handlePurchase(lead.id, price)}
                     onViewDetails={() => setOpenLead({ lead, index: i })}
+                    onGoToWallet={() => setTab('wallet')}
                   />
                 ))}
               </div>
@@ -254,7 +273,8 @@ export default function AdvisorDashboardClient({
         lead={openLead?.lead ?? null}
         index={openLead?.index ?? 0}
         isPurchased={openLead ? purchasedIds.has(openLead.lead.id) : false}
-        onPurchase={() => openLead && markPurchased(openLead.lead.id)}
+        onPurchase={(price) => openLead ? handlePurchase(openLead.lead.id, price) : Promise.resolve({ ok: false })}
+        onGoToWallet={() => { setOpenLead(null); setTab('wallet') }}
         onClose={() => setOpenLead(null)}
       />
     </div>

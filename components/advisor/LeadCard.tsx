@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { CreditCard, Clock, MapPin, CheckCircle } from 'lucide-react'
+import { CreditCard, Clock, MapPin, CheckCircle, Loader2, AlertCircle } from 'lucide-react'
 import type { Lead } from '@/types'
 
 // Asset range → midpoint in £
@@ -40,12 +40,15 @@ interface Props {
   lead: Lead
   index: number
   isPurchased: boolean
-  onPurchase: () => void
+  onPurchase: (price: number) => Promise<{ ok: boolean; reason?: string; is_free?: boolean }>
   onViewDetails: () => void
+  onGoToWallet: () => void
 }
 
-export default function LeadCard({ lead, index, isPurchased, onPurchase, onViewDetails }: Props) {
+export default function LeadCard({ lead, index, isPurchased, onPurchase, onViewDetails, onGoToWallet }: Props) {
   const [showModal, setShowModal] = useState(false)
+  const [loading, setLoading]     = useState(false)
+  const [error, setError]         = useState<string | null>(null)
 
   const pot   = projectedPot(lead)
   const inc   = parseIncomeMidpoint(lead.current_income, lead.target_income)
@@ -56,6 +59,20 @@ export default function LeadCard({ lead, index, isPurchased, onPurchase, onViewD
     { label: 'INC.', value: formatK(inc) },
     { label: 'AGE',  value: lead.age > 0 ? String(lead.age) : '—' },
   ]
+
+  async function handleConfirm() {
+    setLoading(true)
+    setError(null)
+    const result = await onPurchase(price)
+    setLoading(false)
+    if (result.ok) {
+      setShowModal(false)
+    } else if (result.reason === 'insufficient_funds') {
+      setError('insufficient_funds')
+    } else {
+      setError('Something went wrong. Please try again.')
+    }
+  }
 
   return (
     <>
@@ -114,7 +131,7 @@ export default function LeadCard({ lead, index, isPurchased, onPurchase, onViewD
           </div>
         ) : (
           <button
-            onClick={() => setShowModal(true)}
+            onClick={() => { setError(null); setShowModal(true) }}
             className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white text-sm font-semibold rounded-xl py-3 transition-colors"
           >
             <CreditCard className="w-4 h-4" />
@@ -127,7 +144,7 @@ export default function LeadCard({ lead, index, isPurchased, onPurchase, onViewD
       {showModal && (
         <div
           className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-          onClick={() => setShowModal(false)}
+          onClick={() => !loading && setShowModal(false)}
         >
           <div
             className="bg-white rounded-2xl max-w-sm w-full p-6 space-y-5 shadow-2xl"
@@ -159,25 +176,44 @@ export default function LeadCard({ lead, index, isPurchased, onPurchase, onViewD
               ))}
             </div>
 
-            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 text-center">
-              <p className="text-amber-700 text-xs">
-                🚧 Payment coming soon — click Confirm to unlock for free now.
-              </p>
-            </div>
+            {/* Error states */}
+            {error === 'insufficient_funds' ? (
+              <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 space-y-2">
+                <div className="flex items-center gap-2 text-red-700 text-sm font-semibold">
+                  <AlertCircle className="w-4 h-4" />
+                  Insufficient wallet balance
+                </div>
+                <p className="text-red-600 text-xs">You need at least £{price} in your wallet to unlock this lead.</p>
+                <button
+                  onClick={() => { setShowModal(false); onGoToWallet() }}
+                  className="w-full mt-1 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold transition-colors"
+                >
+                  Top up wallet
+                </button>
+              </div>
+            ) : error ? (
+              <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-red-700 text-sm">
+                {error}
+              </div>
+            ) : null}
 
             <div className="flex gap-3">
               <button
                 onClick={() => setShowModal(false)}
-                className="flex-1 py-2.5 border border-gray-200 rounded-xl text-gray-600 text-sm font-semibold hover:bg-gray-50 transition-colors"
+                disabled={loading}
+                className="flex-1 py-2.5 border border-gray-200 rounded-xl text-gray-600 text-sm font-semibold hover:bg-gray-50 transition-colors disabled:opacity-50"
               >
                 Cancel
               </button>
-              <button
-                onClick={() => { onPurchase(); setShowModal(false) }}
-                className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold transition-colors"
-              >
-                Confirm
-              </button>
+              {error !== 'insufficient_funds' && (
+                <button
+                  onClick={handleConfirm}
+                  disabled={loading}
+                  className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold transition-colors disabled:opacity-70 flex items-center justify-center gap-2"
+                >
+                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Confirm'}
+                </button>
+              )}
             </div>
           </div>
         </div>

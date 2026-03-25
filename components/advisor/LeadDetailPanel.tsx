@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   X, TrendingUp, AlertTriangle, CheckCircle,
-  CreditCard, Calendar, User, Briefcase, Clock, Eye,
+  CreditCard, Calendar, User, Briefcase, Clock, Eye, Loader2, AlertCircle,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { calculateReadinessScore, formatCurrency } from '@/lib/utils'
@@ -42,20 +42,45 @@ function parseTime(availability: string[]): string | null {
 
 // ─── component ────────────────────────────────────────────────────────────────
 
+// Asset range → price (mirrors LeadCard)
+const ASSET_MID: Record<string, number> = {
+  '£125k–150k': 137500, '£150k–175k': 162500, '£175k–200k': 187500,
+  '£200k–250k': 225000, '£250k–300k': 275000, '£300k–400k': 350000,
+  '£400k–500k': 450000, '£500k+': 600000,
+}
+function calcPrice(lead: Lead): number {
+  return Math.max(49, Math.round((ASSET_MID[lead.asset_range] ?? 150000) / 2500))
+}
+
 interface Props {
   lead: Lead | null
   index: number
   isPurchased: boolean
-  onPurchase: () => void
+  onPurchase: (price: number) => Promise<{ ok: boolean; reason?: string; is_free?: boolean }>
+  onGoToWallet: () => void
   onClose: () => void
 }
 
-export default function LeadDetailPanel({ lead, index, isPurchased, onPurchase, onClose }: Props) {
+export default function LeadDetailPanel({ lead, index, isPurchased, onPurchase, onGoToWallet, onClose }: Props) {
   const [viewCount, setViewCount] = useState(lead?.view_count ?? 0)
+  const [purchasing, setPurchasing] = useState(false)
+  const [purchaseError, setPurchaseError] = useState<string | null>(null)
+
+  async function handleUnlock() {
+    if (!lead) return
+    setPurchasing(true)
+    setPurchaseError(null)
+    const result = await onPurchase(calcPrice(lead))
+    setPurchasing(false)
+    if (!result.ok) {
+      setPurchaseError(result.reason === 'insufficient_funds' ? 'insufficient_funds' : 'error')
+    }
+  }
 
   // Increment view count when panel opens
   useEffect(() => {
     if (!lead) return
+    setPurchaseError(null)
     const supabase = createClient()
     supabase.rpc('increment_lead_views', { lead_id: lead.id }).then(() => {
       setViewCount(c => c + 1)
@@ -253,14 +278,40 @@ export default function LeadDetailPanel({ lead, index, isPurchased, onPurchase, 
 
             {/* Footer CTA */}
             {!isPurchased && (
-              <div className="px-5 py-4 border-t border-gray-100 shrink-0">
-                <button
-                  onClick={() => { onPurchase(); }}
-                  className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl py-3.5 transition-colors"
-                >
-                  <CreditCard className="w-4 h-4" />
-                  Unlock Lead Details
-                </button>
+              <div className="px-5 py-4 border-t border-gray-100 shrink-0 space-y-3">
+                {purchaseError === 'insufficient_funds' ? (
+                  <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 space-y-2">
+                    <div className="flex items-center gap-2 text-red-700 text-sm font-semibold">
+                      <AlertCircle className="w-4 h-4" />
+                      Insufficient wallet balance
+                    </div>
+                    <p className="text-red-600 text-xs">
+                      You need at least £{lead ? calcPrice(lead) : '—'} in your wallet to unlock this lead.
+                    </p>
+                    <button
+                      onClick={onGoToWallet}
+                      className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold transition-colors"
+                    >
+                      Top up wallet
+                    </button>
+                  </div>
+                ) : purchaseError === 'error' ? (
+                  <p className="text-red-600 text-sm text-center">Something went wrong. Please try again.</p>
+                ) : null}
+
+                {purchaseError !== 'insufficient_funds' && (
+                  <button
+                    onClick={handleUnlock}
+                    disabled={purchasing}
+                    className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl py-3.5 transition-colors disabled:opacity-70"
+                  >
+                    {purchasing ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <><CreditCard className="w-4 h-4" /> Unlock Lead Details</>
+                    )}
+                  </button>
+                )}
               </div>
             )}
           </motion.aside>
