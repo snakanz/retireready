@@ -108,3 +108,23 @@ export type ReadinessScore = {
   projectedPot: number // estimated retirement pot in £
   incomeGap: number    // £ gap between target and projected
 }
+
+export interface WalletTransaction {
+  id: string
+  created_at: string
+  amount: number
+  type: string
+  description: string
+  lead_id: string | null
+}
+
+export interface LeadPurchase {
+  lead_id: string
+  amount_paid: number
+  is_free: boolean
+}
+
+export interface LeadStatus {
+  lead_id: string
+  status: 'new' | 'contacted' | 'booked' | 'converted'
+}

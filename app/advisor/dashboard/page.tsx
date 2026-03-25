@@ -3,28 +3,61 @@ export const runtime = 'edge'
 import { redirect } from 'next/navigation'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import AdvisorDashboardClient from '@/components/advisor/AdvisorDashboardClient'
-import type { Lead } from '@/types'
+import type { Lead, WalletTransaction, LeadPurchase, LeadStatus } from '@/types'
 
 export default async function AdvisorDashboardPage() {
-  // Auth check — middleware already redirects unauthenticated users, but double-check
+  // Auth check
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/advisor/login')
 
-  // Fetch all leads via service role (bypasses RLS — advisors see everything in prototype)
   const service = createServiceClient()
-  const { data: leads, error } = await service
+
+  // Fetch all leads
+  const { data: leads, error: leadsError } = await service
     .from('leads')
     .select('id, created_at, first_name, email, phone, age, target_age, asset_range, current_income, desired_income, target_income, availability, is_purchased, view_count')
     .order('created_at', { ascending: false })
     .limit(200)
 
-  if (error) console.error('Error fetching leads:', error)
+  if (leadsError) console.error('Error fetching leads:', leadsError)
+
+  // Fetch advisor profile (wallet balance, free leads used)
+  const { data: profile } = await service
+    .from('advisor_profiles')
+    .select('wallet_balance, free_leads_used')
+    .eq('id', user.id)
+    .single()
+
+  // Fetch wallet transactions (last 20)
+  const { data: transactions } = await service
+    .from('wallet_transactions')
+    .select('id, created_at, amount, type, description, lead_id')
+    .eq('advisor_id', user.id)
+    .order('created_at', { ascending: false })
+    .limit(20)
+
+  // Fetch lead purchases for this advisor
+  const { data: purchases } = await service
+    .from('lead_purchases')
+    .select('lead_id, amount_paid, is_free')
+    .eq('advisor_id', user.id)
+
+  // Fetch lead statuses for this advisor
+  const { data: statuses } = await service
+    .from('lead_statuses')
+    .select('lead_id, status')
+    .eq('advisor_id', user.id)
 
   return (
     <AdvisorDashboardClient
       user={{ id: user.id, email: user.email ?? '' }}
       leads={(leads ?? []) as Lead[]}
+      walletBalance={profile?.wallet_balance ?? 0}
+      freeLeadsUsed={profile?.free_leads_used ?? 0}
+      transactions={(transactions ?? []) as WalletTransaction[]}
+      purchases={(purchases ?? []) as LeadPurchase[]}
+      statuses={(statuses ?? []) as LeadStatus[]}
     />
   )
 }
