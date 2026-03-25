@@ -42,12 +42,6 @@ function parseTime(availability: string[]): string | null {
 
 // ─── component ────────────────────────────────────────────────────────────────
 
-// Asset range → price (mirrors LeadCard)
-const ASSET_MID: Record<string, number> = {
-  '£125k–150k': 137500, '£150k–175k': 162500, '£175k–200k': 187500,
-  '£200k–250k': 225000, '£250k–300k': 275000, '£300k–400k': 350000,
-  '£400k–500k': 450000, '£500k+': 600000,
-}
 function calcPrice(lead: Lead): number {
   return Math.max(49, Math.round((ASSET_MID[lead.asset_range] ?? 150000) / 2500))
 }
