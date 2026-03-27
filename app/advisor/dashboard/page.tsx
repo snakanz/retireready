@@ -13,6 +13,17 @@ export default async function AdvisorDashboardPage() {
 
   const service = createServiceClient()
 
+  // Check approval status first
+  const { data: profileCheck } = await service
+    .from('advisor_profiles')
+    .select('status')
+    .eq('id', user.id)
+    .single()
+
+  if (!profileCheck || profileCheck.status !== 'approved') {
+    redirect('/advisor/pending')
+  }
+
   // Fetch all leads
   const { data: leads, error: leadsError } = await service
     .from('leads')

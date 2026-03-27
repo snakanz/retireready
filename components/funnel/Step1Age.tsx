@@ -27,9 +27,9 @@ export default function Step1Age({ data, update, onNext }: Props) {
     <div className="glass-card space-y-7">
       <div>
         <p className="text-gold-400 text-sm font-semibold uppercase tracking-widest mb-2">Step 1 of 5</p>
-        <h2 className="text-2xl font-bold text-white">When are you planning to retire?</h2>
-        <p className="text-white/50 text-sm mt-2">
-          We'll calculate exactly where you stand — takes 2 minutes.
+        <h2 className="text-2xl font-bold text-white">Before we match you with an adviser</h2>
+        <p className="text-white/55 text-sm mt-2 leading-relaxed">
+          Let&apos;s understand your circumstances in detail — takes less than 1 minute and is completely free.
         </p>
       </div>
 

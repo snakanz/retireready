@@ -2,20 +2,17 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { Loader2, Mail, Lock, Eye, EyeOff, ShieldCheck, CheckCircle } from 'lucide-react'
-
-type Mode = 'signin' | 'signup'
+import { Loader2, Mail, Lock, Eye, EyeOff, ShieldCheck } from 'lucide-react'
 
 export default function AdvisorLoginPage() {
   const router = useRouter()
-  const [mode, setMode]         = useState<Mode>('signin')
   const [form, setForm]         = useState({ email: '', password: '' })
   const [error, setError]       = useState<string | null>(null)
   const [loading, setLoading]   = useState(false)
   const [showPw, setShowPw]     = useState(false)
-  const [signedUp, setSignedUp] = useState(false)
 
   // Handle PKCE auth code exchange when Supabase redirects back with ?code=xxx
   useEffect(() => {
@@ -38,12 +35,6 @@ export default function AdvisorLoginPage() {
     setError(null)
   }
 
-  function switchMode(next: Mode) {
-    setMode(next)
-    setError(null)
-    setSignedUp(false)
-  }
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!form.email || !form.password) {
@@ -54,25 +45,6 @@ export default function AdvisorLoginPage() {
     setError(null)
     const supabase = createClient()
 
-    if (mode === 'signup') {
-      const { error: authError } = await supabase.auth.signUp({
-        email:    form.email.trim(),
-        password: form.password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/advisor/login`,
-        },
-      })
-      if (authError) {
-        setError(authError.message ?? 'Could not create account. Please try again.')
-        setLoading(false)
-        return
-      }
-      setSignedUp(true)
-      setLoading(false)
-      return
-    }
-
-    // Sign in
     const { error: authError } = await supabase.auth.signInWithPassword({
       email:    form.email.trim(),
       password: form.password,
@@ -109,63 +81,10 @@ export default function AdvisorLoginPage() {
 
         <div className="text-center">
           <h1 className="text-2xl font-bold text-white">Adviser Portal</h1>
-          <p className="text-white/50 text-sm mt-1">
-            {mode === 'signin' ? 'Sign in to access your lead dashboard' : 'Create your adviser account'}
-          </p>
+          <p className="text-white/50 text-sm mt-1">Sign in to access your lead dashboard</p>
         </div>
 
-        {/* Mode toggle */}
-        <div className="flex rounded-xl border border-white/10 overflow-hidden">
-          {(['signin', 'signup'] as Mode[]).map(m => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => switchMode(m)}
-              className={`flex-1 py-2.5 text-sm font-semibold transition-all ${
-                mode === m
-                  ? 'bg-gold-400/20 text-gold-400'
-                  : 'bg-white/3 text-white/45 hover:text-white/70 hover:bg-white/5'
-              }`}
-            >
-              {m === 'signin' ? 'Sign In' : 'Create Account'}
-            </button>
-          ))}
-        </div>
-
-        <AnimatePresence mode="wait">
-          {signedUp ? (
-            <motion.div
-              key="confirmed"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              className="flex flex-col items-center gap-3 py-4 text-center"
-            >
-              <div className="w-14 h-14 rounded-full bg-emerald-400/15 border border-emerald-400/30 flex items-center justify-center">
-                <CheckCircle className="w-7 h-7 text-emerald-400" />
-              </div>
-              <div>
-                <p className="text-white font-semibold">Check your email</p>
-                <p className="text-white/50 text-sm mt-1">
-                  We've sent a confirmation link to <span className="text-white/70">{form.email}</span>.
-                  Click it to activate your account, then sign in.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => switchMode('signin')}
-                className="text-gold-400 text-sm hover:text-gold-300 transition-colors mt-1"
-              >
-                Back to Sign In
-              </button>
-            </motion.div>
-          ) : (
-            <motion.form
-              key={mode}
-              initial={{ opacity: 0, x: mode === 'signup' ? 20 : -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.25 }}
+        <motion.form
               onSubmit={handleSubmit}
               className="space-y-4"
             >
@@ -223,13 +142,11 @@ export default function AdvisorLoginPage() {
                 className="btn-gold w-full flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 {loading
-                  ? <><Loader2 className="w-4 h-4 animate-spin" /> {mode === 'signup' ? 'Creating account…' : 'Signing in…'}</>
-                  : mode === 'signup' ? 'Create Account' : 'Sign In'
+                  ? <><Loader2 className="w-4 h-4 animate-spin" /> Signing in…</>
+                  : 'Sign In'
                 }
               </button>
             </motion.form>
-          )}
-        </AnimatePresence>
 
         <div className="flex items-center justify-center gap-1.5">
           <ShieldCheck className="w-3.5 h-3.5 text-white/25" />
@@ -237,6 +154,13 @@ export default function AdvisorLoginPage() {
             For authorised RetireReady advisers only. FCA registration required.
           </p>
         </div>
+
+        <p className="text-center text-white/35 text-xs">
+          Want to join?{' '}
+          <Link href="/advisor/apply" className="text-amber-400 hover:text-amber-300 transition-colors">
+            Apply for access →
+          </Link>
+        </p>
       </motion.div>
     </main>
   )
