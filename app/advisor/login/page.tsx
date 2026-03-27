@@ -113,7 +113,7 @@ export default function AdvisorLoginPage() {
                   <input
                     name="password"
                     type={showPw ? 'text' : 'password'}
-                    autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+                    autoComplete="current-password"
                     placeholder="••••••••"
                     value={form.password}
                     onChange={handleChange}
