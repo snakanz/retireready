@@ -5,84 +5,55 @@ import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, ReferenceLine, Legend,
+  ResponsiveContainer, ReferenceLine,
 } from 'recharts'
-import { TrendingUp, AlertTriangle, CheckCircle } from 'lucide-react'
+import { TrendingUp, ShieldCheck, MessageSquare, CheckCircle, Loader2 } from 'lucide-react'
 import { calculateReadinessScore, formatCurrency } from '@/lib/utils'
 import type { FunnelData, ReadinessScore } from '@/types'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const LIFE_EXPECTANCY    = 90
-const RETIREMENT_GROWTH  = 0.03   // 3% real return in retirement (conservative)
+const SCENARIOS = [
+  { key: 'low',  rate: 0.02, label: 'Low (2%)',  colour: '#60a5fa' },
+  { key: 'mid',  rate: 0.05, label: 'Mid (5%)',  colour: '#C9A84C' },
+  { key: 'high', rate: 0.10, label: 'High (10%)', colour: '#34d399' },
+]
 
-// Pre-retirement growth scenarios
-const SCENARIO_CONSERVATIVE = 0.04  // 4%
-const SCENARIO_EXPECTED     = 0.06  // 6%
-const SCENARIO_OPTIMISTIC   = 0.08  // 8%
+// ─── Asset midpoints ──────────────────────────────────────────────────────────
+const ASSET_MID: Record<string, number> = {
+  'Under £50k':   25000,   '£50k–£150k':  100000,
+  '£150k–£250k':  200000,  '£250k–£500k': 375000,
+  '£500k–£750k':  625000,  '£750k–£1m':   875000,
+  '£1m–£2m':      1500000, '£2m+':        2500000,
+}
 
-// ─── Chart helpers ────────────────────────────────────────────────────────────
-interface PotPoint {
+function assetMidpoint(range: string): number {
+  return ASSET_MID[range] ?? 200000
+}
+
+// ─── Growth chart builder ─────────────────────────────────────────────────────
+interface GrowthPoint {
   age: number
-  conservative: number
-  expected: number
-  optimistic: number
+  low: number
+  mid: number
+  high: number
 }
 
-/**
- * Project retirement pot using a given annual pre-retirement growth rate,
- * then simulate drawdown during retirement.
- */
-function projectPot(
-  currentAge: number,
-  retirementAge: number,
-  assetRangeMidpoint: number,
-  annualSavings: number,
-  growthRate: number,
-): number {
-  const years = Math.max(retirementAge - currentAge, 0)
-  let pot = assetRangeMidpoint
-  for (let y = 0; y < years; y++) {
-    pot = pot * (1 + growthRate) + annualSavings
-  }
-  return Math.round(Math.max(pot, 0))
-}
-
-function buildMultiScenarioData(
-  currentAge: number,
-  retirementAge: number,
-  assetRangeMidpoint: number,
-  annualSavings: number,
-  targetIncome: number,
-): PotPoint[] {
-  if (!isFinite(retirementAge) || retirementAge >= LIFE_EXPECTANCY) return []
-
-  const conservativePot = projectPot(currentAge, retirementAge, assetRangeMidpoint, annualSavings, SCENARIO_CONSERVATIVE)
-  const expectedPot     = projectPot(currentAge, retirementAge, assetRangeMidpoint, annualSavings, SCENARIO_EXPECTED)
-  const optimisticPot   = projectPot(currentAge, retirementAge, assetRangeMidpoint, annualSavings, SCENARIO_OPTIMISTIC)
-
-  const out: PotPoint[] = []
-  let cPot = conservativePot
-  let ePot = expectedPot
-  let oPot = optimisticPot
-
-  for (let age = Math.floor(retirementAge); age <= LIFE_EXPECTANCY; age++) {
-    out.push({
-      age,
-      conservative: Math.round(Math.max(cPot, 0)),
-      expected:     Math.round(Math.max(ePot, 0)),
-      optimistic:   Math.round(Math.max(oPot, 0)),
+function buildGrowthData(currentAge: number, retirementAge: number, startPot: number): GrowthPoint[] {
+  const points: GrowthPoint[] = []
+  const years = Math.max(retirementAge - currentAge, 1)
+  for (let y = 0; y <= years; y++) {
+    points.push({
+      age:  currentAge + y,
+      low:  Math.round(startPot * Math.pow(1.02, y)),
+      mid:  Math.round(startPot * Math.pow(1.05, y)),
+      high: Math.round(startPot * Math.pow(1.10, y)),
     })
-    cPot = cPot * (1 + RETIREMENT_GROWTH) - targetIncome
-    ePot = ePot * (1 + RETIREMENT_GROWTH) - targetIncome
-    oPot = oPot * (1 + RETIREMENT_GROWTH) - targetIncome
   }
-  return out
+  return points
 }
 
-// ─── Custom tooltip ───────────────────────────────────────────────────────────
-function ChartTooltip({
-  active, payload, label,
-}: {
+// ─── Tooltip ──────────────────────────────────────────────────────────────────
+function ChartTooltip({ active, payload, label }: {
   active?: boolean
   payload?: { name: string; value: number; color: string }[]
   label?: number
@@ -102,58 +73,31 @@ function ChartTooltip({
   )
 }
 
-// ─── Asset range midpoint helper ──────────────────────────────────────────────
-function assetMidpoint(range: string): number {
-  const map: Record<string, number> = {
-    '£125k–150k': 137500,
-    '£150k–175k': 162500,
-    '£175k–200k': 187500,
-    '£200k–250k': 225000,
-    '£250k–300k': 275000,
-    '£300k–400k': 350000,
-    '£400k–500k': 450000,
-    '£500k+':     600000,
-  }
-  return map[range] ?? 200000
-}
-
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function ResultPage() {
   const router = useRouter()
   const [score,     setScore]     = useState<ReadinessScore | null>(null)
   const [funnel,    setFunnel]    = useState<Partial<FunnelData>>({})
   const [animated,  setAnimated]  = useState(false)
-  const [chartData, setChartData] = useState<PotPoint[]>([])
-  const [runOutAge, setRunOutAge] = useState<number | null>(null)
+  const [chartData, setChartData] = useState<GrowthPoint[]>([])
   const [mounted,   setMounted]   = useState(false)
+  const [notes,     setNotes]     = useState('')
+  const [notesSaved, setNotesSaved] = useState(false)
+  const [notesLoading, setNotesLoading] = useState(false)
 
   useEffect(() => {
     setMounted(true)
-
     let raw: string | null = null
-    try {
-      raw = sessionStorage.getItem('rr_funnel')
-    } catch {
-      // sessionStorage unavailable (private browsing edge case)
-    }
+    try { raw = sessionStorage.getItem('rr_funnel') } catch { /* private browsing */ }
 
-    if (!raw) {
-      router.replace('/funnel')
-      return
-    }
+    if (!raw) { router.replace('/funnel'); return }
 
     let parsed: Partial<FunnelData>
     try {
-      const maybeData = JSON.parse(raw)
-      if (!maybeData || typeof maybeData !== 'object') {
-        router.replace('/funnel')
-        return
-      }
-      parsed = maybeData as Partial<FunnelData>
-    } catch {
-      router.replace('/funnel')
-      return
-    }
+      const d = JSON.parse(raw)
+      if (!d || typeof d !== 'object') { router.replace('/funnel'); return }
+      parsed = d as Partial<FunnelData>
+    } catch { router.replace('/funnel'); return }
 
     setFunnel(parsed)
 
@@ -161,27 +105,33 @@ export default function ResultPage() {
       const s = calculateReadinessScore(parsed)
       setScore(s)
 
-      const retirementAge = Math.max(Number(parsed.targetAge) || 65, 1)
-      const currentAge    = Math.max(Number(parsed.age) || 45, 1)
-      const targetIncome  = Math.max(Number(parsed.targetIncome) || 40000, 1)
-      const currentIncome = Number(parsed.currentIncome) || 50000
-      const annualSavings = Math.max(currentIncome * 0.1, 0) // rough 10% savings assumption
+      const currentAge    = Math.max(Number(parsed.age) || 40, 1)
+      const retirementAge = Math.max(Number(parsed.targetAge) || 65, currentAge + 1)
+      const startPot      = assetMidpoint(parsed.assetRange ?? '')
 
-      const assetMid = assetMidpoint(parsed.assetRange ?? '')
-
-      const data = buildMultiScenarioData(currentAge, retirementAge, assetMid, annualSavings, targetIncome)
-      setChartData(data)
-
-      // Run-out age based on expected scenario
-      setRunOutAge(data.find(d => d.expected === 0)?.age ?? null)
+      setChartData(buildGrowthData(currentAge, retirementAge, startPot))
     } catch (err) {
-      console.error('[RetireReady] Results calculation error:', err)
-      setScore({ score: 45, label: 'On Track', colour: 'text-gold-400', projectedPot: 0, incomeGap: 0 })
-      setChartData([])
+      console.error('[RetireReady] Results error:', err)
+      setScore({ score: 50, label: 'On Track', colour: 'text-gold-400', projectedPot: 0, incomeGap: 0 })
     }
 
     setTimeout(() => setAnimated(true), 200)
   }, [router])
+
+  async function saveNotes() {
+    if (!funnel.email || !notes.trim()) return
+    setNotesLoading(true)
+    try {
+      await fetch('/api/leads/notes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: funnel.email, notes }),
+      })
+      setNotesSaved(true)
+    } finally {
+      setNotesLoading(false)
+    }
+  }
 
   if (!score || !mounted) {
     return (
@@ -191,26 +141,20 @@ export default function ResultPage() {
     )
   }
 
-  const safeScore     = isFinite(score.score) ? score.score : 45
+  const safeScore     = isFinite(score.score) ? Math.min(Math.max(score.score, 0), 100) : 50
   const circumference = 2 * Math.PI * 54
   const offset        = circumference - (safeScore / 100) * circumference
-  const scoreStroke   =
-    safeScore >= 75 ? '#34d399' : safeScore >= 50 ? '#C9A84C' :
-    safeScore >= 30 ? '#f59e0b' : '#ef4444'
+  const scoreStroke   = safeScore >= 75 ? '#34d399' : safeScore >= 50 ? '#C9A84C' : safeScore >= 30 ? '#f59e0b' : '#ef4444'
 
-  const retirementAge     = Number(funnel.targetAge) || 65
-  const targetIncome      = Number(funnel.targetIncome) || 40000
-  const projectedPot      = isFinite(score.projectedPot) ? score.projectedPot : 0
-  const sustainableIncome = Math.round(projectedPot * 0.04)
-  const fundedYears       = runOutAge ? runOutAge - retirementAge : LIFE_EXPECTANCY - retirementAge
-  const unfundedYears     = runOutAge ? LIFE_EXPECTANCY - runOutAge : 0
-  const monthlyIncome     = Math.round(sustainableIncome / 12)
-  const incomeGap         = isFinite(score.incomeGap) ? score.incomeGap : 0
+  const currentAge    = Number(funnel.age) || 40
+  const retirementAge = Number(funnel.targetAge) || 65
+  const startPot      = assetMidpoint(funnel.assetRange ?? '')
+  const yearsToRetire = Math.max(retirementAge - currentAge, 0)
 
-  const targetIncomeDisplay = funnel.targetIncomeRange ?? formatCurrency(targetIncome)
-
-  // Latest expected pot value at retirement from chart
-  const expectedAtRetirement = chartData[0]?.expected ?? projectedPot
+  // Final pot values at retirement for each scenario
+  const finalLow  = Math.round(startPot * Math.pow(1.02, yearsToRetire))
+  const finalMid  = Math.round(startPot * Math.pow(1.05, yearsToRetire))
+  const finalHigh = Math.round(startPot * Math.pow(1.10, yearsToRetire))
 
   return (
     <main className="min-h-screen flex flex-col items-center px-4 py-12">
@@ -269,58 +213,49 @@ export default function ResultPage() {
           </div>
         </div>
 
-        {/* ── Key numbers ─────────────────────────────────────────────── */}
-        <div className="grid grid-cols-2 gap-3">
-          <div className="glass-card text-center space-y-1">
-            <TrendingUp className="w-5 h-5 text-gold-400 mx-auto mb-1.5" />
-            <div className="text-lg font-bold text-white">{formatCurrency(expectedAtRetirement)}</div>
-            <div className="text-white/40 text-xs">Expected pot at retirement</div>
-          </div>
-          <div className="glass-card text-center space-y-1">
-            <TrendingUp className="w-5 h-5 text-blue-400 mx-auto mb-1.5" />
-            <div className="text-lg font-bold text-white">{formatCurrency(monthlyIncome)}</div>
-            <div className="text-white/40 text-xs">Monthly income from pot</div>
-          </div>
-          <div className="glass-card text-center space-y-1">
-            {runOutAge
-              ? <AlertTriangle className="w-5 h-5 text-amber-400 mx-auto mb-1.5" />
-              : <CheckCircle  className="w-5 h-5 text-emerald-400 mx-auto mb-1.5" />
-            }
-            <div className={`text-lg font-bold ${runOutAge ? 'text-amber-400' : 'text-emerald-400'}`}>
-              {fundedYears} yrs
+        {/* ── Current value + projected pots ───────────────────────────── */}
+        <div className="glass-card space-y-4">
+          <div>
+            <p className="text-white/40 text-xs uppercase tracking-widest mb-1">Your Investment Today</p>
+            <div className="flex items-baseline gap-2">
+              <span className="text-3xl font-extrabold text-white tabular-nums">
+                {formatCurrency(startPot)}
+              </span>
+              <span className="text-white/40 text-sm">{funnel.assetRange}</span>
             </div>
-            <div className="text-white/40 text-xs">Years funded (expected)</div>
+            <p className="text-white/35 text-xs mt-1">{yearsToRetire} years until your target retirement age of {retirementAge}</p>
           </div>
-          <div className="glass-card text-center space-y-1">
-            {incomeGap > 0
-              ? <AlertTriangle className="w-5 h-5 text-red-400 mx-auto mb-1.5" />
-              : <CheckCircle  className="w-5 h-5 text-emerald-400 mx-auto mb-1.5" />
-            }
-            <div className={`text-lg font-bold ${incomeGap > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
-              {incomeGap > 0 ? formatCurrency(incomeGap) : 'On target'}
-            </div>
-            <div className="text-white/40 text-xs">
-              {incomeGap > 0 ? 'Annual shortfall' : 'Income goal met'}
+
+          <div className="border-t border-white/8 pt-4">
+            <p className="text-white/40 text-xs uppercase tracking-widest mb-3">Projected at Retirement (Age {retirementAge})</p>
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { label: 'Low (2%)',   value: finalLow,  colour: 'text-blue-400',    bg: 'bg-blue-500/8 border-blue-500/20' },
+                { label: 'Mid (5%)',   value: finalMid,  colour: 'text-gold-400',    bg: 'bg-gold-400/8 border-gold-400/20' },
+                { label: 'High (10%)', value: finalHigh, colour: 'text-emerald-400', bg: 'bg-emerald-500/8 border-emerald-500/20' },
+              ].map(s => (
+                <div key={s.label} className={`${s.bg} border rounded-xl p-3 text-center`}>
+                  <p className={`font-extrabold text-sm tabular-nums ${s.colour}`}>
+                    {formatCurrency(s.value)}
+                  </p>
+                  <p className="text-white/40 text-[10px] mt-0.5">{s.label}</p>
+                </div>
+              ))}
             </div>
           </div>
         </div>
 
-        {/* ── Three-scenario chart ──────────────────────────────────────── */}
+        {/* ── Growth chart ─────────────────────────────────────────────── */}
         <div className="glass-card space-y-4">
           <div>
-            <h2 className="text-white font-bold text-sm">How long will your money last?</h2>
+            <h2 className="text-white font-bold text-sm">How your investment could grow</h2>
             <p className="text-white/40 text-xs mt-0.5">
-              Three growth scenarios · {targetIncomeDisplay}/yr drawn · life expectancy {LIFE_EXPECTANCY}
+              Annual growth scenarios · current pot {formatCurrency(startPot)} · no additional contributions
             </p>
           </div>
 
-          {/* Scenario legend pills */}
-          <div className="flex flex-wrap gap-2">
-            {[
-              { key: 'conservative', colour: '#60a5fa', label: 'Conservative (4%)' },
-              { key: 'expected',     colour: '#C9A84C', label: 'Expected (6%)' },
-              { key: 'optimistic',   colour: '#34d399', label: 'Optimistic (8%)' },
-            ].map(s => (
+          <div className="flex flex-wrap gap-3">
+            {SCENARIOS.map(s => (
               <div key={s.key} className="flex items-center gap-1.5 text-xs text-white/50">
                 <div className="w-3 h-0.5 rounded" style={{ background: s.colour }} />
                 {s.label}
@@ -328,34 +263,16 @@ export default function ResultPage() {
             ))}
           </div>
 
-          {runOutAge ? (
-            <div className="bg-amber-500/8 border border-amber-500/20 rounded-xl px-4 py-2.5 text-sm">
-              <span className="text-amber-400 font-semibold">Expected pot runs out at age {runOutAge}</span>
-              <span className="text-white/50"> — that&apos;s {unfundedYears} unfunded years.</span>
-            </div>
-          ) : (
-            <div className="bg-emerald-500/8 border border-emerald-500/20 rounded-xl px-4 py-2.5 text-sm">
-              <span className="text-emerald-400 font-semibold">Great — </span>
-              <span className="text-white/50">your pot is projected to last beyond age {LIFE_EXPECTANCY} in all scenarios.</span>
-            </div>
-          )}
-
           <div style={{ height: 220 }}>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={chartData} margin={{ top: 8, right: 6, left: 0, bottom: 0 }}>
                 <defs>
-                  <linearGradient id="fillConservative" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor="#60a5fa" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="#60a5fa" stopOpacity={0.02} />
-                  </linearGradient>
-                  <linearGradient id="fillExpected" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor="#C9A84C" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#C9A84C" stopOpacity={0.03} />
-                  </linearGradient>
-                  <linearGradient id="fillOptimistic" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor="#34d399" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="#34d399" stopOpacity={0.02} />
-                  </linearGradient>
+                  {SCENARIOS.map(s => (
+                    <linearGradient key={s.key} id={`fill-${s.key}`} x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%"  stopColor={s.colour} stopOpacity={0.25} />
+                      <stop offset="95%" stopColor={s.colour} stopOpacity={0.02} />
+                    </linearGradient>
+                  ))}
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
                 <XAxis
@@ -367,55 +284,112 @@ export default function ResultPage() {
                 />
                 <YAxis
                   tick={{ fill: 'rgba(255,255,255,0.35)', fontSize: 10 }}
-                  tickFormatter={v => `£${(v / 1000).toFixed(0)}k`}
+                  tickFormatter={v => v >= 1_000_000 ? `£${(v/1_000_000).toFixed(1)}m` : `£${(v/1000).toFixed(0)}k`}
                   stroke="rgba(255,255,255,0.08)"
                   tickLine={false}
-                  width={44}
+                  width={50}
                 />
                 <Tooltip content={<ChartTooltip />} />
-                {runOutAge && (
-                  <ReferenceLine
-                    x={runOutAge}
-                    stroke="#f59e0b" strokeDasharray="4 3" strokeWidth={1.5}
-                    label={{ value: `Empty at ${runOutAge}`, position: 'insideTopRight', fill: '#f59e0b', fontSize: 9, dy: -4 }}
-                  />
-                )}
                 <ReferenceLine
-                  x={LIFE_EXPECTANCY}
-                  stroke="rgba(255,255,255,0.18)" strokeDasharray="3 3"
-                  label={{ value: `Age ${LIFE_EXPECTANCY}`, position: 'insideTopLeft', fill: 'rgba(255,255,255,0.3)', fontSize: 9, dy: -4 }}
+                  y={startPot}
+                  stroke="rgba(255,255,255,0.15)" strokeDasharray="4 3"
+                  label={{ value: 'Today', position: 'insideTopLeft', fill: 'rgba(255,255,255,0.3)', fontSize: 9, dy: -4 }}
                 />
-                <Area
-                  type="monotone" dataKey="conservative" name="conservative"
-                  stroke="#60a5fa" strokeWidth={1.5} fill="url(#fillConservative)"
-                  dot={false} activeDot={{ r: 3, fill: '#60a5fa', strokeWidth: 0 }}
-                />
-                <Area
-                  type="monotone" dataKey="expected" name="expected"
-                  stroke="#C9A84C" strokeWidth={2} fill="url(#fillExpected)"
-                  dot={false} activeDot={{ r: 4, fill: '#C9A84C', strokeWidth: 0 }}
-                />
-                <Area
-                  type="monotone" dataKey="optimistic" name="optimistic"
-                  stroke="#34d399" strokeWidth={1.5} fill="url(#fillOptimistic)"
-                  dot={false} activeDot={{ r: 3, fill: '#34d399', strokeWidth: 0 }}
-                />
+                {SCENARIOS.map(s => (
+                  <Area
+                    key={s.key}
+                    type="monotone"
+                    dataKey={s.key}
+                    name={s.label}
+                    stroke={s.colour}
+                    strokeWidth={s.key === 'mid' ? 2 : 1.5}
+                    fill={`url(#fill-${s.key})`}
+                    dot={false}
+                    activeDot={{ r: s.key === 'mid' ? 4 : 3, fill: s.colour, strokeWidth: 0 }}
+                  />
+                ))}
               </AreaChart>
             </ResponsiveContainer>
           </div>
+
+          <p className="text-white/25 text-[10px]">
+            Compound growth only. No additional contributions assumed. Past performance is not a reliable indicator.
+          </p>
         </div>
 
-        {/* FCA disclaimers */}
+        {/* ── Advisor CTA ───────────────────────────────────────────────── */}
+        <div className="bg-gradient-to-br from-[#0d2244] to-[#0B1F3A] border border-gold-400/20 rounded-2xl p-6 space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-gold-400/15 border border-gold-400/30 rounded-full flex items-center justify-center shrink-0">
+              <ShieldCheck className="w-5 h-5 text-gold-400" />
+            </div>
+            <div>
+              <p className="text-gold-400 font-bold text-sm">Your plan is ready</p>
+              <p className="text-white/50 text-xs">An FCA-regulated adviser has been notified</p>
+            </div>
+          </div>
+
+          <p className="text-white/75 text-sm leading-relaxed">
+            One of our <span className="text-white font-semibold">licensed, experienced FCA-regulated financial advisers</span> on our panel will review your retirement picture and reach out to you directly to walk through your plan in detail — completely free, no obligation.
+          </p>
+
+          <div className="grid grid-cols-2 gap-2">
+            {[
+              'FCA authorised & regulated',
+              'No obligation consultation',
+              'Whole-of-market access',
+              'No fees to you',
+            ].map(item => (
+              <div key={item} className="flex items-center gap-2 text-xs text-white/60">
+                <CheckCircle className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                {item}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Notes ────────────────────────────────────────────────────── */}
+        <div className="glass-card space-y-3">
+          <div className="flex items-center gap-2">
+            <MessageSquare className="w-4 h-4 text-white/40" />
+            <p className="text-white/80 text-sm font-semibold">Additional notes for your adviser</p>
+          </div>
+          <p className="text-white/40 text-xs">
+            Is there anything specific you'd like to discuss or clarify? Your adviser will see this before they call.
+          </p>
+          <textarea
+            value={notes}
+            onChange={e => setNotes(e.target.value)}
+            placeholder="e.g. I have a defined benefit pension I'd like to factor in, or I'm thinking of retiring early..."
+            rows={4}
+            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/25 text-sm focus:outline-none focus:border-gold-400/60 focus:bg-white/8 transition-all resize-none"
+          />
+          <button
+            onClick={saveNotes}
+            disabled={!notes.trim() || notesLoading || notesSaved}
+            className="w-full py-2.5 bg-white/8 hover:bg-white/12 border border-white/15 rounded-xl text-sm font-semibold text-white/70 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {notesLoading ? (
+              <><Loader2 className="w-4 h-4 animate-spin" /> Saving…</>
+            ) : notesSaved ? (
+              <><CheckCircle className="w-4 h-4 text-emerald-400" /> Notes saved</>
+            ) : (
+              'Send notes to adviser'
+            )}
+          </button>
+        </div>
+
+        {/* ── FCA disclaimer ────────────────────────────────────────────── */}
         <div className="bg-white/3 border border-white/8 rounded-xl px-4 py-3 space-y-2">
           <p className="text-amber-400/80 text-xs font-semibold">
-            For illustrative purposes only. Actual returns will vary. Not financial advice.
+            For illustrative purposes only. Not financial advice.
           </p>
           <p className="text-white/22 text-xs leading-relaxed">
-            Conservative scenario assumes 4% annual pre-retirement growth, expected 6%, optimistic 8%.
-            All scenarios assume 3% real return in retirement and income drawn at your target rate.
-            Figures are in today&apos;s money and do not account for inflation, tax, charges, or State Pension.
-            Past performance is not a reliable indicator of future results. RetireReady is not an FCA-authorised
-            financial adviser. Please seek regulated financial advice before making any decisions.
+            Growth projections assume 2%, 5%, and 10% annual compound returns on the current pot value with no additional contributions.
+            Figures are in today&apos;s money and do not account for inflation, tax, adviser charges, or State Pension entitlement.
+            Actual investment returns will vary and past performance is not a reliable indicator of future results.
+            RetireReady is not an FCA-authorised financial adviser. All adviser introductions are to independently regulated firms.
+            Please seek regulated financial advice before making any investment decisions.
           </p>
         </div>
       </motion.div>

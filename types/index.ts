@@ -3,14 +3,14 @@
 // ============================================================
 
 export type AssetRange =
-  | '£125k–150k'
-  | '£150k–175k'
-  | '£175k–200k'
-  | '£200k–250k'
-  | '£250k–300k'
-  | '£300k–400k'
-  | '£400k–500k'
-  | '£500k+'
+  | 'Under £50k'
+  | '£50k–£150k'
+  | '£150k–£250k'
+  | '£250k–£500k'
+  | '£500k–£750k'
+  | '£750k–£1m'
+  | '£1m–£2m'
+  | '£2m+'
 
 export type DayOfWeek = 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday'
 
@@ -49,12 +49,13 @@ export interface Lead {
   age: number
   target_age: number
   asset_range: string
-  current_income: string | null    // income range label, e.g. "£50,000–£75,000"
-  desired_income: string | null    // retirement income range label
+  current_income: string | null    // e.g. "£45,000/yr"
+  desired_income: string | null    // e.g. "Comfortable — £33,750/yr"
   target_income: number
   availability: string[]
   is_purchased: boolean
   view_count: number
+  notes: string | null
 }
 
 export interface MaskedLead {

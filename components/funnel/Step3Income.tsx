@@ -1,29 +1,23 @@
 'use client'
 
 import { ArrowLeft, ArrowRight } from 'lucide-react'
-import { cn } from '@/lib/utils'
 import type { FunnelData } from '@/types'
 
-// ─── Shared income range config ────────────────────────────────────────────
-export const INCOME_RANGES: { label: string; midpoint: number }[] = [
-  { label: 'Under £20,000',         midpoint: 15000   },
-  { label: '£20,000–£30,000',       midpoint: 25000   },
-  { label: '£30,000–£40,000',       midpoint: 35000   },
-  { label: '£40,000–£50,000',       midpoint: 45000   },
-  { label: '£50,000–£75,000',       midpoint: 62500   },
-  { label: '£75,000–£100,000',      midpoint: 87500   },
-  { label: '£100,000–£150,000',     midpoint: 125000  },
-  { label: '£150,000–£200,000',     midpoint: 175000  },
-  { label: '£200,000–£300,000',     midpoint: 250000  },
-  { label: '£300,000–£500,000',     midpoint: 400000  },
-  { label: '£500,000–£1,000,000',   midpoint: 750000  },
-  { label: '£1,000,000+',           midpoint: 1500000 },
+const INCOME_LEVELS = [
+  { pct: 0.25, label: 'Essential',         desc: 'Cover the basics — modest but secure' },
+  { pct: 0.50, label: 'Comfortable',       desc: 'Day-to-day comfort with some flexibility' },
+  { pct: 0.75, label: 'Good Life',         desc: 'Maintain most of your current lifestyle' },
+  { pct: 1.00, label: 'Match Current',     desc: 'Keep your exact standard of living' },
+  { pct: 1.25, label: 'Luxury',            desc: 'Upgrade your lifestyle in retirement' },
 ]
 
-// Export midpoint lookup for use in calculations
-export const INCOME_MIDPOINTS: Record<string, number> = Object.fromEntries(
-  INCOME_RANGES.map(r => [r.label, r.midpoint])
-)
+function formatGBP(val: number): string {
+  return `£${Math.round(val).toLocaleString('en-GB')}`
+}
+
+function parseRawInput(raw: string): number {
+  return parseInt(raw.replace(/[^0-9]/g, ''), 10) || 0
+}
 
 interface Props {
   data: Partial<FunnelData>
@@ -32,49 +26,45 @@ interface Props {
   onBack: () => void
 }
 
-function IncomeGrid({
-  selected,
-  onSelect,
-}: {
-  selected: string | undefined
-  onSelect: (label: string, midpoint: number) => void
-}) {
-  return (
-    <div className="grid grid-cols-2 gap-2">
-      {INCOME_RANGES.map(({ label, midpoint }) => (
-        <button
-          key={label}
-          onClick={() => onSelect(label, midpoint)}
-          className={cn(
-            'rounded-xl border px-3 py-2.5 text-xs font-semibold text-left transition-all duration-200 leading-tight',
-            selected === label
-              ? 'border-gold-400 bg-gold-400/15 text-gold-400 shadow-md shadow-gold-400/10 scale-[1.02]'
-              : 'border-white/10 bg-white/5 text-white/65 hover:border-white/25 hover:bg-white/8'
-          )}
-        >
-          {label}
-        </button>
-      ))}
-    </div>
-  )
-}
-
 export default function Step3Income({ data, update, onNext, onBack }: Props) {
-  const currentIncomeRange = data.currentIncomeRange
-  const targetIncomeRange  = data.targetIncomeRange
+  const currentIncome  = data.currentIncome ?? 0
+  const displayValue   = currentIncome > 0 ? currentIncome.toLocaleString('en-GB') : ''
 
-  const replacementRatio = currentIncomeRange && targetIncomeRange
-    ? Math.round((INCOME_MIDPOINTS[targetIncomeRange] / INCOME_MIDPOINTS[currentIncomeRange]) * 100)
-    : null
+  // Find slider index from stored targetIncome
+  const storedPct   = currentIncome > 0 && data.targetIncome ? data.targetIncome / currentIncome : 0.75
+  const sliderIndex = INCOME_LEVELS.reduce((best, l, i) =>
+    Math.abs(l.pct - storedPct) < Math.abs(INCOME_LEVELS[best].pct - storedPct) ? i : best, 2)
 
-  function getRatioContext(ratio: number): { text: string; colour: string } {
-    if (ratio >= 80) return { text: 'Ambitious — equivalent to your current lifestyle', colour: 'text-purple-300/80' }
-    if (ratio >= 60) return { text: 'Comfortable — typical target for a great retirement', colour: 'text-emerald-300/80' }
-    if (ratio >= 40) return { text: 'Modest — covers essentials with some flexibility', colour: 'text-gold-400/80' }
-    return { text: 'Minimal — covers basic living costs', colour: 'text-blue-300/70' }
+  const selectedLevel = INCOME_LEVELS[sliderIndex]
+  const targetIncome  = Math.round(currentIncome * selectedLevel.pct)
+
+  function handleIncomeInput(raw: string) {
+    const val = parseRawInput(raw)
+    update({ currentIncome: val, currentIncomeRange: val > 0 ? `${formatGBP(val)}/yr` : undefined })
   }
 
-  const canContinue = !!currentIncomeRange && !!targetIncomeRange
+  function handleSlider(idx: number) {
+    const level = INCOME_LEVELS[idx]
+    const tgt   = Math.round(currentIncome * level.pct)
+    update({
+      targetIncome:      tgt,
+      targetIncomeRange: `${level.label} — ${formatGBP(tgt)}/yr`,
+    })
+  }
+
+  function handleNext() {
+    // Ensure targetIncome is committed
+    if (currentIncome > 0) {
+      const tgt = Math.round(currentIncome * selectedLevel.pct)
+      update({
+        targetIncome:      tgt,
+        targetIncomeRange: `${selectedLevel.label} — ${formatGBP(tgt)}/yr`,
+      })
+    }
+    onNext()
+  }
+
+  const canContinue = currentIncome > 0
 
   return (
     <div className="glass-card space-y-6">
@@ -82,58 +72,82 @@ export default function Step3Income({ data, update, onNext, onBack }: Props) {
         <p className="text-gold-400 text-sm font-semibold uppercase tracking-widest mb-2">Step 3 of 5</p>
         <h2 className="text-2xl font-bold text-white">Let's talk about your income</h2>
         <p className="text-white/50 text-sm mt-2">
-          We'll use these to calculate how much you need and whether you're on track.
+          Enter your current income to see your retirement options.
         </p>
       </div>
 
-      {/* ── Current income ───────────────────────────────────────────────── */}
-      <div className="space-y-3">
-        <div>
-          <label className="text-white/80 text-sm font-semibold">Your current annual income</label>
-          <p className="text-white/40 text-xs mt-0.5">Before tax — include salary and regular income</p>
+      {/* ── Current income input ─────────────────────────────────────────── */}
+      <div className="space-y-2">
+        <label className="text-white/80 text-sm font-semibold">
+          Your current annual income <span className="text-white/40 font-normal">(before tax)</span>
+        </label>
+        <div className="relative">
+          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-white/50 font-bold text-lg">£</span>
+          <input
+            type="text"
+            inputMode="numeric"
+            value={displayValue}
+            onChange={e => handleIncomeInput(e.target.value)}
+            placeholder="e.g. 45,000"
+            className="w-full bg-white/5 border border-white/10 rounded-xl pl-9 pr-4 py-3.5 text-white placeholder-white/25 focus:outline-none focus:border-gold-400/60 focus:bg-white/8 transition-all font-semibold text-lg"
+          />
         </div>
-        <IncomeGrid
-          selected={currentIncomeRange}
-          onSelect={(label, midpoint) => update({ currentIncomeRange: label, currentIncome: midpoint })}
-        />
+        {currentIncome > 0 && (
+          <p className="text-white/40 text-xs">{formatGBP(currentIncome)} per year</p>
+        )}
       </div>
 
-      <div className="border-t border-white/8" />
-
-      {/* ── Target retirement income ─────────────────────────────────────── */}
-      <div className={cn('space-y-3 transition-opacity duration-300', currentIncomeRange ? 'opacity-100' : 'opacity-50')}>
+      {/* ── Retirement income slider ─────────────────────────────────────── */}
+      <div className={`space-y-4 transition-opacity duration-300 ${currentIncome > 0 ? 'opacity-100' : 'opacity-35 pointer-events-none'}`}>
         <div>
-          <label className="text-white/80 text-sm font-semibold">Desired retirement income</label>
-          <p className="text-white/40 text-xs mt-0.5">Per year in today's money — what would make you comfortable?</p>
+          <label className="text-white/80 text-sm font-semibold">Your desired retirement lifestyle</label>
+          <p className="text-white/40 text-xs mt-0.5">Slide to select your target</p>
         </div>
-        <IncomeGrid
-          selected={targetIncomeRange}
-          onSelect={(label, midpoint) => update({ targetIncomeRange: label, targetIncome: midpoint })}
-        />
-      </div>
 
-      {/* ── Replacement ratio pill ─────────────────────────────────────── */}
-      {replacementRatio !== null && (
-        <div className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 flex items-center justify-between">
-          <div>
-            <p className="text-white/50 text-xs">Income replacement ratio</p>
-            <p className={`text-sm font-medium mt-0.5 ${getRatioContext(replacementRatio).colour}`}>
-              {getRatioContext(replacementRatio).text}
+        {/* Level labels above slider */}
+        <div className="flex justify-between text-[10px] text-white/40 px-0.5">
+          {INCOME_LEVELS.map((l, i) => (
+            <span
+              key={i}
+              className={`text-center leading-tight ${i === sliderIndex ? 'text-gold-400 font-bold' : ''}`}
+              style={{ width: '18%' }}
+            >
+              {l.label}
+            </span>
+          ))}
+        </div>
+
+        <input
+          type="range"
+          min={0} max={4} step={1}
+          value={sliderIndex}
+          onChange={e => handleSlider(Number(e.target.value))}
+          style={{ accentColor: '#C9A84C', width: '100%', cursor: 'pointer' }}
+        />
+
+        {/* Selected level summary */}
+        {currentIncome > 0 && (
+          <div className="bg-gold-400/10 border border-gold-400/20 rounded-xl p-4">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-gold-400 font-bold text-sm">{selectedLevel.label}</span>
+              <span className="text-white font-extrabold text-xl tabular-nums">
+                {formatGBP(targetIncome)}<span className="text-white/40 text-sm font-normal">/yr</span>
+              </span>
+            </div>
+            <p className="text-white/45 text-xs">{selectedLevel.desc}</p>
+            <p className="text-white/30 text-xs mt-0.5">
+              {Math.round(selectedLevel.pct * 100)}% of your current income
             </p>
           </div>
-          <div className="text-right ml-4 shrink-0">
-            <span className="text-2xl font-extrabold text-white tabular-nums">{replacementRatio}%</span>
-            <p className="text-white/30 text-xs">of current income</p>
-          </div>
-        </div>
-      )}
+        )}
+      </div>
 
       <div className="flex gap-3">
         <button onClick={onBack} className="btn-outline-gold flex items-center gap-2">
           <ArrowLeft className="w-4 h-4" /> Back
         </button>
         <button
-          onClick={onNext}
+          onClick={handleNext}
           disabled={!canContinue}
           className="btn-gold flex-1 flex items-center justify-center gap-2 group disabled:opacity-40 disabled:cursor-not-allowed"
         >

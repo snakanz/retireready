@@ -2,11 +2,17 @@
 
 import { ArrowLeft, ArrowRight, Info } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import type { AssetRange, FunnelData } from '@/types'
+import type { FunnelData } from '@/types'
 
-const RANGES: AssetRange[] = [
-  '£125k–150k', '£150k–175k', '£175k–200k', '£200k–250k',
-  '£250k–300k', '£300k–400k', '£400k–500k', '£500k+',
+export const ASSET_RANGES: { label: string; midpoint: number }[] = [
+  { label: 'Under £50k',    midpoint: 25000   },
+  { label: '£50k–£150k',   midpoint: 100000  },
+  { label: '£150k–£250k',  midpoint: 200000  },
+  { label: '£250k–£500k',  midpoint: 375000  },
+  { label: '£500k–£750k',  midpoint: 625000  },
+  { label: '£750k–£1m',    midpoint: 875000  },
+  { label: '£1m–£2m',      midpoint: 1500000 },
+  { label: '£2m+',         midpoint: 2500000 },
 ]
 
 interface Props {
@@ -22,7 +28,7 @@ export default function Step2Assets({ data, update, onNext, onBack }: Props) {
   return (
     <div className="glass-card space-y-6">
       <div>
-        <p className="text-gold-400 text-sm font-semibold uppercase tracking-widest mb-2">Step 2 of 6</p>
+        <p className="text-gold-400 text-sm font-semibold uppercase tracking-widest mb-2">Step 2 of 5</p>
         <h2 className="text-2xl font-bold text-white">How much have you saved so far?</h2>
         <p className="text-white/50 text-sm mt-2">
           Include pensions, ISAs, savings accounts — everything counts towards your future.
@@ -30,23 +36,22 @@ export default function Step2Assets({ data, update, onNext, onBack }: Props) {
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        {RANGES.map(range => (
+        {ASSET_RANGES.map(({ label }) => (
           <button
-            key={range}
-            onClick={() => update({ assetRange: range })}
+            key={label}
+            onClick={() => update({ assetRange: label as FunnelData['assetRange'] })}
             className={cn(
               'rounded-xl border px-4 py-3.5 text-sm font-semibold transition-all duration-200',
-              selected === range
+              selected === label
                 ? 'border-gold-400 bg-gold-400/15 text-gold-400 shadow-lg shadow-gold-400/10 scale-[1.02]'
                 : 'border-white/10 bg-white/5 text-white/70 hover:border-white/30 hover:bg-white/10'
             )}
           >
-            {range}
+            {label}
           </button>
         ))}
       </div>
 
-      {/* Reassurance note */}
       <div className="flex items-start gap-2 bg-white/3 border border-white/8 rounded-xl px-4 py-3">
         <Info className="w-4 h-4 text-white/40 shrink-0 mt-0.5" />
         <p className="text-white/40 text-xs leading-relaxed">
