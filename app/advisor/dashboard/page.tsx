@@ -33,12 +33,21 @@ export default async function AdvisorDashboardPage() {
 
   if (leadsError) console.error('Error fetching leads:', leadsError)
 
-  // Fetch advisor profile (wallet balance, free leads used)
+  // Fetch advisor profile
   const { data: profile } = await service
     .from('advisor_profiles')
-    .select('wallet_balance, free_leads_used')
+    .select('wallet_balance, free_leads_used, referral_code')
     .eq('id', user.id)
     .single()
+
+  // Fetch referral stats
+  const { data: referralRewards } = await service
+    .from('referral_rewards')
+    .select('amount')
+    .eq('referrer_id', user.id)
+
+  const referralCount  = referralRewards?.length ?? 0
+  const rewardsEarned  = referralRewards?.reduce((sum, r) => sum + r.amount, 0) ?? 0
 
   // Fetch wallet transactions (last 20)
   const { data: transactions } = await service
@@ -69,6 +78,9 @@ export default async function AdvisorDashboardPage() {
       transactions={(transactions ?? []) as WalletTransaction[]}
       purchases={(purchases ?? []) as LeadPurchase[]}
       statuses={(statuses ?? []) as LeadStatus[]}
+      referralCode={profile?.referral_code ?? ''}
+      referralCount={referralCount}
+      rewardsEarned={rewardsEarned}
     />
   )
 }

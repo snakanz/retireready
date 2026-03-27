@@ -29,6 +29,12 @@ const schema = z.object({
 
 export default function AdvisorApplyForm() {
   const router = useRouter()
+
+  // Capture referral code from URL (?ref=XXXXXXXX)
+  const referralCode = typeof window !== 'undefined'
+    ? new URLSearchParams(window.location.search).get('ref') ?? ''
+    : ''
+
   const [form, setForm] = useState({
     fullName: '', email: '', password: '', phone: '',
     firmName: '', fcaNumber: '', specialty: '',
@@ -81,13 +87,14 @@ export default function AdvisorApplyForm() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        userId:    authData.user.id,
-        fullName:  form.fullName.trim(),
-        email:     form.email.trim().toLowerCase(),
-        phone:     form.phone.trim(),
-        firmName:  form.firmName.trim(),
-        fcaNumber: form.fcaNumber.trim(),
-        specialty: form.specialty,
+        userId:       authData.user.id,
+        fullName:     form.fullName.trim(),
+        email:        form.email.trim().toLowerCase(),
+        phone:        form.phone.trim(),
+        firmName:     form.firmName.trim(),
+        fcaNumber:    form.fcaNumber.trim(),
+        specialty:    form.specialty,
+        referralCode: referralCode || null,
       }),
     })
 
@@ -202,6 +209,17 @@ export default function AdvisorApplyForm() {
       {globalError && (
         <div className="bg-red-500/10 border border-red-500/25 rounded-xl px-4 py-2.5">
           <p className="text-red-400 text-sm">{globalError}</p>
+        </div>
+      )}
+
+      {/* Referral banner */}
+      {referralCode && (
+        <div className="bg-emerald-500/8 border border-emerald-500/20 rounded-xl px-4 py-3 flex items-center gap-3">
+          <div className="text-xl">🤝</div>
+          <div>
+            <p className="text-emerald-400 font-semibold text-sm">You were referred!</p>
+            <p className="text-white/45 text-xs">Your colleague gets £300 credit when you deposit £100+.</p>
+          </div>
         </div>
       )}
 

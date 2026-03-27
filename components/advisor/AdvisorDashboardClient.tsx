@@ -8,6 +8,7 @@ import type { Lead, WalletTransaction, LeadPurchase, LeadStatus } from '@/types'
 import LeadCard from './LeadCard'
 import LeadDetailPanel from './LeadDetailPanel'
 import WalletPanel from './WalletPanel'
+import ReferralPanel from './ReferralPanel'
 
 interface Props {
   user: { id: string; email: string }
@@ -17,9 +18,12 @@ interface Props {
   transactions: WalletTransaction[]
   purchases: LeadPurchase[]
   statuses: LeadStatus[]
+  referralCode: string
+  referralCount: number
+  rewardsEarned: number
 }
 
-type Tab = 'marketplace' | 'wallet'
+type Tab = 'marketplace' | 'wallet' | 'refer'
 
 const STATUS_OPTIONS: LeadStatus['status'][] = ['new', 'contacted', 'booked', 'converted']
 
@@ -36,6 +40,7 @@ function formatPence(pence: number): string {
 
 export default function AdvisorDashboardClient({
   user, leads, walletBalance, freeLeadsUsed, transactions, purchases, statuses,
+  referralCode, referralCount, rewardsEarned,
 }: Props) {
   const router = useRouter()
   const [tab, setTab]           = useState<Tab>('marketplace')
@@ -103,7 +108,7 @@ export default function AdvisorDashboardClient({
   const availableLeads = leads.filter(l => !purchasedIds.has(l.id))
   const purchasedLeads = leads.filter(l => purchasedIds.has(l.id))
 
-  const displayed = (tab === 'marketplace' ? availableLeads : purchasedLeads).filter(lead =>
+  const displayed = (tab === 'wallet' || tab === 'refer' ? purchasedLeads : availableLeads).filter(lead =>
     !q ||
     lead.asset_range?.toLowerCase().includes(q) ||
     (lead.current_income ?? '').toLowerCase().includes(q) ||
@@ -154,7 +159,7 @@ export default function AdvisorDashboardClient({
             </p>
           </div>
           <div className="flex rounded-xl overflow-hidden border border-gray-200 shrink-0">
-            {([['marketplace', 'Marketplace'], ['wallet', 'Your Wallet']] as [Tab, string][]).map(([t, label]) => (
+            {([['marketplace', 'Marketplace'], ['wallet', 'Your Wallet'], ['refer', 'Refer & Earn']] as [Tab, string][]).map(([t, label]) => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
@@ -170,7 +175,15 @@ export default function AdvisorDashboardClient({
           </div>
         </div>
 
-        {tab === 'wallet' ? (
+        {tab === 'refer' ? (
+          <div className="bg-[#0B1F3A] rounded-2xl p-6">
+            <ReferralPanel
+              referralCode={referralCode}
+              referralCount={referralCount}
+              rewardsEarned={rewardsEarned}
+            />
+          </div>
+        ) : tab === 'wallet' ? (
           /* ── Wallet tab ──────────────────────────────────────────────── */
           <div className="space-y-8">
             {/* WalletPanel in dark container */}
