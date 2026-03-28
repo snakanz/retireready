@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { Mail, Phone, GripVertical } from 'lucide-react'
+import { Mail, Phone, GripVertical, ChevronRight } from 'lucide-react'
 import type { Lead, LeadStatus } from '@/types'
 
 const COLUMNS: { key: LeadStatus['status']; label: string; accent: string; bg: string; border: string }[] = [
@@ -15,15 +15,18 @@ interface Props {
   leads: Lead[]
   leadStatuses: Map<string, LeadStatus['status']>
   onStatusChange: (leadId: string, status: LeadStatus['status']) => void
+  onViewLead: (lead: Lead) => void
 }
 
-export default function KanbanBoard({ leads, leadStatuses, onStatusChange }: Props) {
+export default function KanbanBoard({ leads, leadStatuses, onStatusChange, onViewLead }: Props) {
   const [dragging, setDragging]   = useState<string | null>(null)
   const [dragOver, setDragOver]   = useState<LeadStatus['status'] | null>(null)
-  const dragId = useRef<string | null>(null)
+  const dragId    = useRef<string | null>(null)
+  const didDrag   = useRef(false)
 
   function onDragStart(leadId: string) {
-    dragId.current = leadId
+    didDrag.current = true
+    dragId.current  = leadId
     setDragging(leadId)
   }
 
@@ -32,6 +35,7 @@ export default function KanbanBoard({ leads, leadStatuses, onStatusChange }: Pro
     setDragging(null)
     setDragOver(null)
     dragId.current = null
+    setTimeout(() => { didDrag.current = false }, 50)
   }
 
   return (
@@ -70,45 +74,48 @@ export default function KanbanBoard({ leads, leadStatuses, onStatusChange }: Pro
                   draggable
                   onDragStart={() => onDragStart(lead.id)}
                   onDragEnd={() => { setDragging(null); setDragOver(null) }}
-                  className={`bg-white rounded-xl border border-gray-100 p-3 shadow-sm select-none transition-all ${
+                  onClick={() => { if (!didDrag.current) onViewLead(lead) }}
+                  className={`bg-white rounded-xl border border-gray-100 p-3 shadow-sm select-none transition-all group ${
                     dragging === lead.id
                       ? 'opacity-40 scale-95 rotate-1 shadow-none'
-                      : 'cursor-grab active:cursor-grabbing hover:shadow-md hover:border-gray-200'
+                      : 'cursor-pointer hover:shadow-md hover:border-indigo-200'
                   }`}
                 >
-                  <div className="flex items-start gap-2">
-                    <GripVertical className="w-3.5 h-3.5 text-gray-300 mt-0.5 shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <div className="w-6 h-6 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600 font-bold text-[10px] shrink-0">
-                          {lead.first_name.charAt(0).toUpperCase()}
-                        </div>
-                        <div>
-                          <p className="font-semibold text-gray-900 text-xs leading-tight">{lead.first_name}</p>
-                          <p className="text-gray-400 text-[10px]">Age {lead.age} · {lead.asset_range}</p>
-                        </div>
-                      </div>
-                      {lead.email && (
-                        <a
-                          href={`mailto:${lead.email}`}
-                          onClick={e => e.stopPropagation()}
-                          className="flex items-center gap-1 text-[10px] text-indigo-500 hover:text-indigo-700 truncate"
-                        >
-                          <Mail className="w-3 h-3 shrink-0" />
-                          <span className="truncate">{lead.email}</span>
-                        </a>
-                      )}
-                      {lead.phone && (
-                        <a
-                          href={`tel:${lead.phone}`}
-                          onClick={e => e.stopPropagation()}
-                          className="flex items-center gap-1 text-[10px] text-gray-400 hover:text-gray-600 mt-0.5"
-                        >
-                          <Phone className="w-3 h-3 shrink-0" />
-                          <span>{lead.phone}</span>
-                        </a>
-                      )}
+                  {/* Name + drag handle row */}
+                  <div className="flex items-center gap-2 mb-2.5">
+                    <GripVertical className="w-3.5 h-3.5 text-gray-300 shrink-0 cursor-grab" />
+                    <div className="w-7 h-7 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600 font-bold text-xs shrink-0">
+                      {lead.first_name.charAt(0).toUpperCase()}
                     </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-gray-900 text-xs leading-tight truncate">{lead.first_name}</p>
+                      <p className="text-gray-400 text-[10px]">Age {lead.age} · {lead.asset_range}</p>
+                    </div>
+                    <ChevronRight className="w-3.5 h-3.5 text-gray-300 group-hover:text-indigo-400 transition-colors shrink-0" />
+                  </div>
+
+                  {/* Contact info — prominent */}
+                  <div className="space-y-1 border-t border-gray-50 pt-2">
+                    {lead.phone && (
+                      <a
+                        href={`tel:${lead.phone}`}
+                        onClick={e => e.stopPropagation()}
+                        className="flex items-center gap-1.5 bg-indigo-50 hover:bg-indigo-100 rounded-lg px-2.5 py-1.5 transition-colors"
+                      >
+                        <Phone className="w-3 h-3 text-indigo-500 shrink-0" />
+                        <span className="text-xs text-indigo-700 font-medium">{lead.phone}</span>
+                      </a>
+                    )}
+                    {lead.email && (
+                      <a
+                        href={`mailto:${lead.email}`}
+                        onClick={e => e.stopPropagation()}
+                        className="flex items-center gap-1.5 bg-gray-50 hover:bg-gray-100 rounded-lg px-2.5 py-1.5 transition-colors"
+                      >
+                        <Mail className="w-3 h-3 text-gray-400 shrink-0" />
+                        <span className="text-xs text-gray-600 truncate">{lead.email}</span>
+                      </a>
+                    )}
                   </div>
                 </div>
               ))}

@@ -202,6 +202,10 @@ export default function AdvisorDashboardClient({
                   leads={purchasedLeads}
                   leadStatuses={leadStatuses}
                   onStatusChange={updateLeadStatus}
+                  onViewLead={lead => {
+                    const index = leads.findIndex(l => l.id === lead.id)
+                    setOpenLead({ lead, index: index >= 0 ? index : 0 })
+                  }}
                 />
               )}
             </div>
