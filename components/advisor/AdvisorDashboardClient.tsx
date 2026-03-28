@@ -9,6 +9,7 @@ import LeadCard from './LeadCard'
 import LeadDetailPanel from './LeadDetailPanel'
 import WalletPanel from './WalletPanel'
 import ReferralPanel from './ReferralPanel'
+import KanbanBoard from './KanbanBoard'
 
 interface Props {
   user: { id: string; email: string }
@@ -25,15 +26,6 @@ interface Props {
 
 type Tab = 'marketplace' | 'wallet' | 'refer'
 
-const STATUS_OPTIONS: LeadStatus['status'][] = ['new', 'contacted', 'booked', 'converted']
-
-const STATUS_COLOURS: Record<LeadStatus['status'], string> = {
-  new: 'bg-blue-500/15 text-blue-400 border-blue-500/25',
-  contacted: 'bg-amber-500/15 text-amber-400 border-amber-500/25',
-  booked: 'bg-purple-500/15 text-purple-400 border-purple-500/25',
-  converted: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/25',
-}
-
 function formatPence(pence: number): string {
   return `£${(pence / 100).toFixed(2)}`
 }
@@ -47,12 +39,10 @@ export default function AdvisorDashboardClient({
   const [search, setSearch]     = useState('')
   const [openLead, setOpenLead] = useState<{ lead: Lead; index: number } | null>(null)
 
-  // Build purchased set from lead_purchases table
   const [purchasedIds, setPurchased] = useState<Set<string>>(
     new Set(purchases.map(p => p.lead_id))
   )
 
-  // Lead statuses — mutable local state so dropdown updates are instant
   const [leadStatuses, setLeadStatuses] = useState<Map<string, LeadStatus['status']>>(
     new Map(statuses.map(s => [s.lead_id, s.status]))
   )
@@ -72,7 +62,7 @@ export default function AdvisorDashboardClient({
     const { data, error } = await supabase.rpc('purchase_lead', {
       p_advisor_id: user.id,
       p_lead_id:    leadId,
-      p_price:      pricePounds * 100, // convert to pence
+      p_price:      pricePounds * 100,
     })
     if (error) {
       console.error('[AdvisorDashboard] purchase_lead error:', error)
@@ -80,13 +70,12 @@ export default function AdvisorDashboardClient({
     }
     if (data?.ok) {
       markPurchased(leadId)
-      router.refresh() // re-fetch wallet balance from server
+      router.refresh()
     }
     return data as { ok: boolean; reason?: string; is_free?: boolean }
   }
 
   async function updateLeadStatus(leadId: string, status: LeadStatus['status']) {
-    // Optimistic update
     setLeadStatuses(prev => new Map(prev).set(leadId, status))
 
     const supabase = createClient()
@@ -99,21 +88,22 @@ export default function AdvisorDashboardClient({
         updated_at: new Date().toISOString(),
       }, { onConflict: 'advisor_id,lead_id' })
 
-    if (error) {
-      console.error('[AdvisorDashboard] Failed to update lead status:', error)
-    }
+    if (error) console.error('[AdvisorDashboard] Failed to update lead status:', error)
   }
 
   const q = search.toLowerCase()
-  const availableLeads = leads.filter(l => !purchasedIds.has(l.id))
-  const purchasedLeads = leads.filter(l => purchasedIds.has(l.id))
 
-  const displayed = (tab === 'wallet' || tab === 'refer' ? purchasedLeads : availableLeads).filter(lead =>
+  // Marketplace: all leads — advisor's own purchases show as purchased,
+  // leads bought by others show with sold overlay, rest are available.
+  const marketplaceLeads = leads.filter(lead =>
     !q ||
     lead.asset_range?.toLowerCase().includes(q) ||
     (lead.current_income ?? '').toLowerCase().includes(q) ||
     String(lead.age).includes(q)
   )
+
+  const purchasedLeads = leads.filter(l => purchasedIds.has(l.id))
+  const availableCount = leads.filter(l => !purchasedIds.has(l.id) && !l.is_purchased).length
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -133,7 +123,6 @@ export default function AdvisorDashboardClient({
           </span>
         </div>
         <div className="flex items-center gap-4">
-          {/* Wallet balance chip */}
           <div className="flex items-center gap-1.5 bg-amber-50 border border-amber-200 rounded-full px-3 py-1 text-sm font-semibold text-amber-700">
             <Wallet className="w-3.5 h-3.5" />
             {formatPence(walletBalance)}
@@ -155,11 +144,11 @@ export default function AdvisorDashboardClient({
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Lead Marketplace</h1>
             <p className="text-gray-400 text-sm mt-1">
-              {availableLeads.length} high-intent retirement leads available in your area.
+              {availableCount} high-intent retirement leads available in your area.
             </p>
           </div>
           <div className="flex rounded-xl overflow-hidden border border-gray-200 shrink-0">
-            {([['marketplace', 'Marketplace'], ['wallet', 'Your Wallet'], ['refer', 'Refer & Earn']] as [Tab, string][]).map(([t, label]) => (
+            {([['marketplace', 'Marketplace'], ['wallet', 'Lead Tracker'], ['refer', 'Refer & Earn']] as [Tab, string][]).map(([t, label]) => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
@@ -183,10 +172,10 @@ export default function AdvisorDashboardClient({
               rewardsEarned={rewardsEarned}
             />
           </div>
+
         ) : tab === 'wallet' ? (
-          /* ── Wallet tab ──────────────────────────────────────────────── */
+          /* ── Lead Tracker tab ─────────────────────────────────────────── */
           <div className="space-y-8">
-            {/* WalletPanel in dark container */}
             <div className="bg-[#0B1F3A] rounded-2xl p-6">
               <WalletPanel
                 advisorId={user.id}
@@ -196,57 +185,31 @@ export default function AdvisorDashboardClient({
               />
             </div>
 
-            {/* Purchased leads with status */}
             <div>
-              <h2 className="text-lg font-bold text-gray-900 mb-4">
-                Purchased Leads ({purchasedLeads.length})
-              </h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-bold text-gray-900">
+                  Lead Pipeline ({purchasedLeads.length})
+                </h2>
+                <p className="text-xs text-gray-400">Drag cards between columns to update status</p>
+              </div>
+
               {purchasedLeads.length === 0 ? (
                 <div className="bg-white rounded-2xl border border-gray-100 py-16 text-center">
                   <p className="text-gray-400 text-sm">You haven&apos;t purchased any leads yet.</p>
                 </div>
               ) : (
-                <div className="space-y-3">
-                  {purchasedLeads.map(lead => {
-                    const status = leadStatuses.get(lead.id) ?? 'new'
-                    return (
-                      <div
-                        key={lead.id}
-                        className="bg-white rounded-2xl border border-gray-100 px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-                      >
-                        <div className="space-y-0.5">
-                          <div className="font-semibold text-gray-900 text-sm">{lead.first_name}</div>
-                          <div className="text-gray-400 text-xs">
-                            Age {lead.age} · {lead.asset_range} · {lead.email ?? '—'}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border ${STATUS_COLOURS[status]}`}>
-                            {status.charAt(0).toUpperCase() + status.slice(1)}
-                          </span>
-                          <select
-                            value={status}
-                            onChange={e => updateLeadStatus(lead.id, e.target.value as LeadStatus['status'])}
-                            className="text-xs bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5 text-gray-700 focus:outline-none focus:border-indigo-400 transition-colors"
-                          >
-                            {STATUS_OPTIONS.map(s => (
-                              <option key={s} value={s}>
-                                {s.charAt(0).toUpperCase() + s.slice(1)}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
+                <KanbanBoard
+                  leads={purchasedLeads}
+                  leadStatuses={leadStatuses}
+                  onStatusChange={updateLeadStatus}
+                />
               )}
             </div>
           </div>
+
         ) : (
-          /* ── Marketplace tab ─────────────────────────────────────────── */
+          /* ── Marketplace tab ──────────────────────────────────────────── */
           <>
-            {/* Search */}
             <div className="relative max-w-md">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
@@ -258,24 +221,26 @@ export default function AdvisorDashboardClient({
               />
             </div>
 
-            {/* Grid */}
-            {displayed.length === 0 ? (
+            {marketplaceLeads.length === 0 ? (
               <div className="bg-white rounded-2xl border border-gray-100 py-16 text-center">
                 <p className="text-gray-400 text-sm">No leads available right now — check back soon.</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                {displayed.map((lead, i) => (
-                  <LeadCard
-                    key={lead.id}
-                    lead={lead}
-                    index={i}
-                    isPurchased={purchasedIds.has(lead.id)}
-                    onPurchase={(price) => handlePurchase(lead.id, price)}
-                    onViewDetails={() => setOpenLead({ lead, index: i })}
-                    onGoToWallet={() => setTab('wallet')}
-                  />
-                ))}
+                {marketplaceLeads.map((lead, i) => {
+                  const isPurchased = purchasedIds.has(lead.id)
+                  const isSold      = lead.is_purchased && !isPurchased
+                  return (
+                    <LeadCard
+                      key={lead.id}
+                      lead={lead}
+                      index={i}
+                      isPurchased={isPurchased}
+                      isSold={isSold}
+                      onViewDetails={() => setOpenLead({ lead, index: i })}
+                    />
+                  )
+                })}
               </div>
             )}
           </>
