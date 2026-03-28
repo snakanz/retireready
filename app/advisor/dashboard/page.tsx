@@ -27,7 +27,7 @@ export default async function AdvisorDashboardPage() {
   // Fetch all leads
   const { data: leads, error: leadsError } = await service
     .from('leads')
-    .select('id, created_at, first_name, email, phone, age, target_age, asset_range, current_income, desired_income, target_income, availability, is_purchased, view_count')
+    .select('id, created_at, first_name, email, phone, age, target_age, asset_range, asset_value, current_income, desired_income, target_income, availability, is_purchased, view_count')
     .order('created_at', { ascending: false })
     .limit(200)
 

@@ -44,7 +44,8 @@ function parseTime(availability: string[]): string | null {
 // ─── component ────────────────────────────────────────────────────────────────
 
 function calcPrice(lead: Lead): number {
-  return Math.max(49, Math.round((ASSET_MID[lead.asset_range] ?? 150000) / 2500))
+  const assets = lead.asset_value ?? ASSET_MID[lead.asset_range] ?? 150_000
+  return Math.max(49, Math.round(assets / 2500))
 }
 
 interface Props {

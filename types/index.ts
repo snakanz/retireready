@@ -24,6 +24,7 @@ export interface FunnelData {
 
   // Assets
   assetRange: AssetRange
+  currentAssets?: number          // exact value in £ from slider
 
   // Incomes — midpoint for calculations + range label for Supabase/display
   currentIncome?: number          // midpoint, e.g. 62500
@@ -56,6 +57,7 @@ export interface Lead {
   is_purchased: boolean
   view_count: number
   notes: string | null
+  asset_value: number | null      // exact asset value in £ (from slider)
 }
 
 export interface MaskedLead {

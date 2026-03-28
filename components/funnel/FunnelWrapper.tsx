@@ -59,6 +59,7 @@ export default function FunnelWrapper() {
       age:            data.age,
       target_age:     data.targetAge,
       asset_range:    data.assetRange,
+      asset_value:    data.currentAssets ?? null,
       current_income: data.currentIncomeRange ?? null,
       desired_income: data.targetIncomeRange  ?? null,
       target_income:  data.targetIncome,
