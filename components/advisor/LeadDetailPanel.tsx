@@ -44,8 +44,19 @@ function parseTime(availability: string[]): string | null {
 // ─── component ────────────────────────────────────────────────────────────────
 
 function calcPrice(lead: Lead): number {
-  const assets = lead.asset_value ?? ASSET_MID[lead.asset_range] ?? 150_000
-  return Math.max(49, Math.round(assets / 2500))
+  const assets  = lead.asset_value ?? ASSET_MID[lead.asset_range] ?? 150_000
+  const base    = Math.max(49, Math.round(assets / 2500))
+
+  const years   = (lead.target_age || 65) - (lead.age || 40)
+  const timeMult =
+    years <= 2  ? 1.4 :
+    years <= 5  ? 1.3 :
+    years <= 10 ? 1.2 :
+    years <= 20 ? 1.0 : 0.85
+
+  const notesMult = (lead.notes && lead.notes.length > 20) ? 1.15 : 1.0
+
+  return Math.min(300, Math.max(49, Math.round(base * timeMult * notesMult)))
 }
 
 interface Props {
