@@ -9,6 +9,7 @@ import {
 } from 'recharts'
 import { TrendingUp, ShieldCheck, MessageSquare, CheckCircle, Loader2 } from 'lucide-react'
 import { calculateReadinessScore, formatCurrency } from '@/lib/utils'
+import { track } from '@/lib/meta'
 import type { FunnelData, ReadinessScore } from '@/types'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -100,6 +101,13 @@ export default function ResultPage() {
     } catch { router.replace('/funnel'); return }
 
     setFunnel(parsed)
+
+    // Fire CompleteRegistration — full funnel finished, lead in DB
+    track('CompleteRegistration', {
+      email: parsed.email,
+      phone: parsed.phone,
+      customData: { content_name: 'Retirement Report', status: 'completed' },
+    })
 
     try {
       const s = calculateReadinessScore(parsed)

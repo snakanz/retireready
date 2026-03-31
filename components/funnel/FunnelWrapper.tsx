@@ -1,9 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { track } from '@/lib/meta'
 import type { FunnelData } from '@/types'
 
 import Step1Age          from './Step1Age'
@@ -36,13 +37,34 @@ export default function FunnelWrapper() {
     availability: [],
   })
 
-  function next() { setDir(1);  setStep(s => Math.min(s + 1, TOTAL_STEPS)) }
+  // Fire InitiateCheckout when funnel first mounts (user starts)
+  useEffect(() => {
+    track('InitiateCheckout', { customData: { content_name: 'Retirement Funnel' } })
+  }, [])
+
+  function next() {
+    const nextStep = Math.min(step + 1, TOTAL_STEPS)
+    setDir(1)
+    setStep(nextStep)
+    // Track each step advance as a custom FunnelStep event
+    track('FunnelStep', { params: { step: nextStep, step_name: STEP_LABELS[nextStep - 1] }, custom: true })
+  }
+
   function back() { setDir(-1); setStep(s => Math.max(s - 1, 1)) }
   function update(patch: Partial<FunnelData>) { setData(prev => ({ ...prev, ...patch })) }
 
   // Called by Step4Contact after validation — stores contact fields then advances
-  function saveContact(contact: Pick<FunnelData, 'firstName' | 'email' | 'phone'>) {
+  // This is the PRIMARY conversion event — we now have email + phone
+  async function saveContact(contact: Pick<FunnelData, 'firstName' | 'email' | 'phone'>) {
     setData(prev => ({ ...prev, ...contact }))
+
+    // Fire Lead event with Advanced Matching (email + phone hashed server-side)
+    track('Lead', {
+      email: contact.email,
+      phone: contact.phone,
+      customData: { content_name: 'Retirement Lead', currency: 'GBP' },
+    })
+
     next()
   }
 

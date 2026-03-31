@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import './globals.css'
+import MetaPixel from '@/components/MetaPixel'
 
 export const metadata: Metadata = {
   title: 'RetireReady — UK Retirement Planning',
@@ -38,7 +39,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       </head>
-      <body>{children}</body>
+      <body>
+        <MetaPixel />
+        {children}
+      </body>
     </html>
   )
 }
